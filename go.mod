@@ -1,16 +1,16 @@
-module github.com/remilapeyre/vault-acme
+module github.com/Boostport/vault-acme
 
-go 1.21
+go 1.22
 
 toolchain go1.22.1
 
 require (
+	github.com/Boostport/vault-acme/acme/sidecar v0.0.0-20240314052819-bae49c48133f
 	github.com/go-acme/lego/v4 v4.16.1
 	github.com/hashicorp/go-hclog v1.6.2
 	github.com/hashicorp/vault/api v1.12.1
 	github.com/hashicorp/vault/sdk v0.11.1
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/remilapeyre/vault-acme/acme/sidecar v0.0.0
 	github.com/stretchr/testify v1.9.0
 )
 
@@ -203,5 +203,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/remilapeyre/vault-acme/acme/sidecar v0.0.0 => ./acme/sidecar

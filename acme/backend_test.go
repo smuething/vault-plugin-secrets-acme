@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Boostport/vault-acme/acme/sidecar"
 	"github.com/hashicorp/vault/sdk/logical"
-	"github.com/remilapeyre/vault-acme/acme/sidecar"
 	"github.com/stretchr/testify/require"
 )
 

@@ -4,9 +4,9 @@ import (
 	"flag"
 	"os"
 
+	"github.com/Boostport/vault-acme/acme/sidecar"
 	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/api"
-	"github.com/remilapeyre/vault-acme/acme/sidecar"
 )
 
 func main() {

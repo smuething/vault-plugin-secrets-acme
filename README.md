@@ -16,7 +16,7 @@ Binary releases can be downloaded at https://github.com/Boostport/vault-acme/rel
 
 ## Documentation
 
-The documentation is available at [`website/source/docs/secrets/acme/index.html.md`](https://github.com/remilapeyre/vault-acme/blob/master/website/source/docs/secrets/acme/index.html.md).
+The documentation is available at [`website/source/docs/secrets/acme/index.html.md`](website/source/docs/secrets/acme/index.html.md).
 
 ## How to use this plugin
 
