@@ -3,49 +3,27 @@ on:
   push:
     tags:
     - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   release:
-    name: Run tests and publish release
+    name: Publish release
     runs-on: ubuntu-latest
     steps:
-
     - name: Set up Go 1.22
       uses: actions/setup-go@v5
       with:
         go-version: 1.22
-      id: go
-
-    - name: Check out code into the Go module directory
+    - name: Install cosign
+      uses: sigstore/cosign-installer@v3
+    - name: Checkout
       uses: actions/checkout@v4
-
-    - name: Run unit tests
-      run: |
-        export PATH=$PATH:$(go env GOPATH)/bin
-        make test
-
-    - name: Run acceptance tests
-      run: |
-        curl -sLo vault.zip https://releases.hashicorp.com/vault/1.15.0/vault_1.15.0_linux_amd64.zip
-        unzip vault.zip
-        sudo mv vault /usr/local/bin/vault
-        export PATH=$PATH:$(go env GOPATH)/bin
-        make testacc
-
-    - name: Build all binaries
-      run: |
-        GO111MODULE=off go get -u github.com/mitchellh/gox/...
-        export PATH=$PATH:$(go env GOPATH)/bin
-        make all archives
-
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v1
+    - name: Build and publish
+      uses: goreleaser/goreleaser-action@v5
+      with:
+        args: release --clean
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        name: Release ${{ github.ref }}
-        draft: false
-        prerelease: true
-        files: |
-          ./build/*.zip
-          ./build/vault-acme_SHA256SUMS
