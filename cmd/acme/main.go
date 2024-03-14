@@ -9,6 +9,8 @@ import (
 	"github.com/hashicorp/vault/sdk/plugin"
 )
 
+var version = ""
+
 func main() {
 	apiClientMeta := &api.PluginAPIClientMeta{}
 	flags := apiClientMeta.FlagSet()
@@ -18,7 +20,7 @@ func main() {
 	tlsProviderFunc := api.VaultPluginTLSProvider(tlsConfig)
 
 	err := plugin.Serve(&plugin.ServeOpts{
-		BackendFactoryFunc: acme.Factory,
+		BackendFactoryFunc: acme.Factory(version),
 		TLSProviderFunc:    tlsProviderFunc,
 	})
 	if err != nil {

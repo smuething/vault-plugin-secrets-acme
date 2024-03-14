@@ -14,32 +14,38 @@ type backend struct {
 }
 
 // Factory creates a new ACME backend implementing logical.Backend
-func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend, error) {
-	b := backend{
-		cache: NewCache(),
-	}
+func Factory(version string) logical.Factory {
+	return func(ctx context.Context, conf *logical.BackendConfig) (logical.Backend, error) {
+		b := backend{
+			cache: NewCache(),
+		}
 
-	b.Backend = &framework.Backend{
-		BackendType: logical.TypeLogical,
-		Secrets: []*framework.Secret{
-			secretCert(&b),
-		},
-		Paths: framework.PathAppend(
-			pathAccounts(&b),
-			pathRoles(&b),
-			[]*framework.Path{
-				pathCerts(&b),
-				pathChallenges(&b),
-				pathCache(&b),
+		b.Backend = &framework.Backend{
+			BackendType: logical.TypeLogical,
+			Secrets: []*framework.Secret{
+				secretCert(&b),
 			},
-		),
-	}
+			Paths: framework.PathAppend(
+				pathAccounts(&b),
+				pathRoles(&b),
+				[]*framework.Path{
+					pathCerts(&b),
+					pathChallenges(&b),
+					pathCache(&b),
+				},
+			),
+		}
 
-	if err := b.Setup(ctx, conf); err != nil {
-		return nil, err
-	}
+		if version != "" {
+			b.Backend.RunningVersion = fmt.Sprintf("v%s", version)
+		}
 
-	return b, nil
+		if err := b.Setup(ctx, conf); err != nil {
+			return nil, err
+		}
+
+		return b, nil
+	}
 }
 
 func (b *backend) pathExistenceCheck(ctx context.Context, req *logical.Request, _ *framework.FieldData) (bool, error) {

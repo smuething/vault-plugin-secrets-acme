@@ -17,7 +17,7 @@ import (
 func TestValidateNames(t *testing.T) {
 	config := logical.TestBackendConfig()
 	config.StorageView = &logical.InmemStorage{}
-	b, err := Factory(context.Background(), config)
+	b, err := Factory("test")(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func getTestConfig(t *testing.T) (*logical.BackendConfig, logical.Backend) {
 
 	config := logical.TestBackendConfig()
 	config.StorageView = &logical.InmemStorage{}
-	b, err := Factory(context.Background(), config)
+	b, err := Factory("test")(context.Background(), config)
 	if err != nil {
 		t.Fatal(err)
 	}
