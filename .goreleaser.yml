@@ -1,5 +1,17 @@
 builds:
   - main: ./cmd/acme
+    id: vault-acme
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+  - main: ./cmd/sidecar
+    id: vault-acme-sidecar
     env:
       - CGO_ENABLED=0
     goos:
