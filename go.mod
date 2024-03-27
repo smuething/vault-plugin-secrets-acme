@@ -1,11 +1,11 @@
-module github.com/Boostport/vault-acme
+module github.com/Boostport/vault-plugin-secrets-acme
 
 go 1.22
 
 toolchain go1.22.1
 
 require (
-	github.com/Boostport/vault-acme/acme/sidecar v0.0.0-20240314052819-bae49c48133f
+	github.com/Boostport/vault-plugin-secrets-acme/acme/sidecar v0.0.0-20240327022858-45f79fcca51a
 	github.com/go-acme/lego/v4 v4.16.1
 	github.com/hashicorp/go-hclog v1.6.2
 	github.com/hashicorp/vault/api v1.12.1

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/Boostport/vault-acme/acme"
+	"github.com/Boostport/vault-plugin-secrets-acme/acme"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/api"
 	"github.com/hashicorp/vault/sdk/plugin"
