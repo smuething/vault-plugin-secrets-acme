@@ -10,7 +10,7 @@ jobs:
     name: Run tests
     runs-on: ubuntu-latest
     env:
-      VAULT_VERSION: "1.15.6"
+      VAULT_VERSION: "1.17.0"
     steps:
     - name: Set up Go
       uses: actions/setup-go@v5
