@@ -53,7 +53,7 @@
   "devDependencies": {
     "babel-preset-preact": "^1.1.0",
     "babel-register": "^6.26.0",
-    "node-fetch": "^2.2.1",
+    "node-fetch": "^2.6.7",
     "spike": "^2.3.0",
     "spike-css-standards": "^4.0.0",
     "spike-js-standards": "^2.1.0",
