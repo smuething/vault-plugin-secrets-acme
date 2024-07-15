@@ -35,7 +35,7 @@
     "@segment/top-domain": "^3.0.0",
     "color-contrast": "^0.0.1",
     "js-cookie": "^2.2.0",
-    "marked": "^0.5.1",
+    "marked": "^4.0.10",
     "normalize.css": "^8.0.0",
     "object-assign": "^4.1.1",
     "object-fit-images": "^3.2.4",
