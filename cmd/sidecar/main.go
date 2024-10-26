@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/Boostport/vault-plugin-secrets-acme/acme/sidecar"
+	"github.com/smuething/vault-plugin-secrets-acme/acme/sidecar"
 	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/api"
 )

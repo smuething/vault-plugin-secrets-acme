@@ -1,5 +1,5 @@
 # Vault ACME
-[![Run tests](https://github.com/Boostport/vault-plugin-secrets-acme/actions/workflows/test.yml/badge.svg)](https://github.com/Boostport/vault-plugin-secrets-acme/actions/workflows/test.yml)
+[![Run tests](https://github.com/smuething/vault-plugin-secrets-acme/actions/workflows/test.yml/badge.svg)](https://github.com/smuething/vault-plugin-secrets-acme/actions/workflows/test.yml)
 
 Vault ACME is a [Vault](https://www.vaultproject.io/) secret engine that allow
 users and application to retrieve TLS certificates validated by an [ACME provider](https://tools.ietf.org/html/rfc8555)
@@ -9,7 +9,7 @@ applications permission to modify DNS and using Vault's audit and policy systems
 Discussion: https://github.com/hashicorp/vault/issues/4950
 
 ## Download Vault ACME
-Binary releases can be downloaded at https://github.com/Boostport/vault-plugin-secrets-acme/releases.
+Binary releases can be downloaded at https://github.com/smuething/vault-plugin-secrets-acme/releases.
 
 ## Verify Binaries
 The checksum for the binaries are signed with cosign. To verify the binaries, download the following files (where
@@ -24,7 +24,7 @@ Then download the release binaries you need. Here, we just download the linux am
 Then run the following commands to verify the checksums and signature:
 ```sh
 # Verify checksum signature
-$ cosign verify-blob --signature vault-plugin-secrets-acme_${VERSION}_checksums.txt.sig --certificate vault-plugin-secrets-acme_${VERSION}_checksums.txt.pem vault-plugin-secrets-acme_${VERSION}_checksums.txt --certificate-identity "https://github.com/Boostport/vault-plugin-secrets-acme/.github/workflows/release.yml@refs/tags/v${VERSION}" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+$ cosign verify-blob --signature vault-plugin-secrets-acme_${VERSION}_checksums.txt.sig --certificate vault-plugin-secrets-acme_${VERSION}_checksums.txt.pem vault-plugin-secrets-acme_${VERSION}_checksums.txt --certificate-identity "https://github.com/smuething/vault-plugin-secrets-acme/.github/workflows/release.yml@refs/tags/v${VERSION}" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # Verify checksum with binaries
 $ sha256sum -c vault-plugin-secrets-acme_${VERSION}_checksums.txt
