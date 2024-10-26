@@ -41,6 +41,14 @@ func pathRoles(b *backend) []*framework.Path {
 					Type:    framework.TypeInt,
 					Default: 70,
 				},
+				"key_type": {
+					Type:          framework.TypeString,
+					Default:       "",
+					AllowedValues: keyTypes,
+				},
+				"revoke_on_cache_expiry": {
+					Type: framework.TypeBool,
+				},
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
 				logical.CreateOperation: &framework.PathOperation{
@@ -72,12 +80,14 @@ func (b *backend) roleCreateOrUpdate(ctx context.Context, req *logical.Request, 
 	}
 
 	r := role{
-		Account:          data.Get("account").(string),
-		AllowedDomains:   data.Get("allowed_domains").([]string),
-		AllowBareDomains: data.Get("allow_bare_domains").(bool),
-		AllowSubdomains:  data.Get("allow_subdomains").(bool),
-		DisableCache:     data.Get("disable_cache").(bool),
-		CacheForRatio:    cacheForRatio,
+		Account:             data.Get("account").(string),
+		AllowedDomains:      data.Get("allowed_domains").([]string),
+		AllowBareDomains:    data.Get("allow_bare_domains").(bool),
+		AllowSubdomains:     data.Get("allow_subdomains").(bool),
+		DisableCache:        data.Get("disable_cache").(bool),
+		CacheForRatio:       cacheForRatio,
+		KeyType:             data.Get("key_type").(string),
+		RevokeOnCacheExpiry: data.Get("revoke_on_cache_expiry").(bool),
 	}
 	if err := r.save(ctx, req.Storage, req.Path); err != nil {
 		return nil, err
@@ -97,12 +107,14 @@ func (b *backend) roleRead(ctx context.Context, req *logical.Request, _ *framewo
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"account":            r.Account,
-			"allowed_domains":    r.AllowedDomains,
-			"allow_bare_domains": r.AllowBareDomains,
-			"allow_subdomains":   r.AllowSubdomains,
-			"disable_cache":      r.DisableCache,
-			"cache_for_ratio":    r.CacheForRatio,
+			"account":                r.Account,
+			"allowed_domains":        r.AllowedDomains,
+			"allow_bare_domains":     r.AllowBareDomains,
+			"allow_subdomains":       r.AllowSubdomains,
+			"disable_cache":          r.DisableCache,
+			"cache_for_ratio":        r.CacheForRatio,
+			"key_type":               r.KeyType,
+			"revoke_on_cache_expiry": r.RevokeOnCacheExpiry,
 		},
 	}, nil
 }
@@ -121,12 +133,14 @@ func (b *backend) roleList(ctx context.Context, req *logical.Request, _ *framewo
 }
 
 type role struct {
-	Account          string
-	AllowedDomains   []string
-	AllowBareDomains bool
-	AllowSubdomains  bool
-	DisableCache     bool
-	CacheForRatio    int
+	Account             string
+	AllowedDomains      []string
+	AllowBareDomains    bool
+	AllowSubdomains     bool
+	DisableCache        bool
+	CacheForRatio       int
+	KeyType             string
+	RevokeOnCacheExpiry bool
 }
 
 func getRole(ctx context.Context, storage logical.Storage, path string) (*role, error) {

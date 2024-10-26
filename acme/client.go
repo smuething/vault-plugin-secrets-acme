@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/lego"
@@ -13,7 +14,7 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func getCertFromACMEProvider(ctx context.Context, logger log.Logger, req *logical.Request, a *account, names []string) (*certificate.Resource, error) {
+func getCertFromACMEProvider(ctx context.Context, logger log.Logger, req *logical.Request, a *account, r *role, names []string) (*certificate.Resource, error) {
 	client, err := a.getClient()
 	if err != nil {
 		return nil, err
@@ -27,6 +28,18 @@ func getCertFromACMEProvider(ctx context.Context, logger log.Logger, req *logica
 	request := certificate.ObtainRequest{
 		Domains: names,
 		Bundle:  true,
+	}
+
+	if r.KeyType != "" {
+		keyType, err := getKeyType(r.KeyType)
+		if err != nil {
+			return nil, err
+		}
+		privateKey, err := certcrypto.GeneratePrivateKey(keyType)
+		if err != nil {
+			return nil, err
+		}
+		request.PrivateKey = privateKey
 	}
 
 	return client.Certificate.Obtain(request)

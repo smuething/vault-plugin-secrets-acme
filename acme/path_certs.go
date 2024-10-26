@@ -93,7 +93,7 @@ func (b *backend) certCreate(ctx context.Context, req *logical.Request, data *fr
 	// If we did not find a cert, we have to request one
 	if cert == nil {
 		b.Logger().Debug("Contacting the ACME provider to get a new certificate")
-		cert, err = getCertFromACMEProvider(ctx, b.Logger(), req, a, names)
+		cert, err = getCertFromACMEProvider(ctx, b.Logger(), req, a, r, names)
 		if err != nil {
 			return logical.ErrorResponse("Failed to validate certificate signing request: %s", err), err
 		}
