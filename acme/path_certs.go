@@ -5,35 +5,68 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
-	"time"
 
-	"github.com/go-acme/lego/v4/certcrypto"
-	"github.com/go-acme/lego/v4/certificate"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func pathCerts(b *backend) *framework.Path {
-	return &framework.Path{
-		Pattern: "certs/" + framework.GenericNameRegex("role"),
-		Fields: map[string]*framework.FieldSchema{
-			"role": {
-				Type:     framework.TypeString,
-				Required: true,
-			},
-			"common_name": {
-				Type:     framework.TypeString,
-				Required: true,
-			},
-			"alternative_names": {
-				Type: framework.TypeCommaStringSlice,
+const (
+	POLICY_REUSE           = "reuse"
+	POLICY_REVOKE          = "revoke"
+	POLICY_ROLLOVER        = "rollover"
+	POLICY_ROLLOVER_REVOKE = "rollover_revoke"
+)
+
+func pathCerts(b *backend) []*framework.Path {
+	return []*framework.Path{
+		{
+			Pattern: "certs/?",
+			Operations: map[logical.Operation]framework.OperationHandler{
+				logical.ListOperation: &framework.PathOperation{
+					Callback: b.cacheList,
+				},
 			},
 		},
-		ExistenceCheck: b.pathExistenceCheck,
-		Operations: map[logical.Operation]framework.OperationHandler{
-			logical.CreateOperation: &framework.PathOperation{
-				Callback: b.certCreate,
+		{
+			Pattern: "certs/" + framework.GenericNameRegex("role"),
+			Fields: map[string]*framework.FieldSchema{
+				"role": {
+					Type:        framework.TypeString,
+					Required:    true,
+					Description: "The role to be used for issuing the certificate",
+				},
+				"common_name": {
+					Type:        framework.TypeString,
+					Required:    true,
+					Description: "The common name of the certificate. Use this for the primary domain name",
+				},
+				"alternative_names": {
+					Type:        framework.TypeCommaStringSlice,
+					Description: "A list of additional DNS names that will be put into the SAN field of the certificate",
+				},
+				"policy": {
+					Type: framework.TypeString,
+					AllowedValues: []interface{}{
+						POLICY_REUSE,
+						POLICY_REVOKE,
+						POLICY_ROLLOVER,
+						POLICY_ROLLOVER_REVOKE,
+					},
+					Default:     POLICY_REUSE,
+					Description: "The policy for handling certificates that are already cached by Vault.",
+				},
+				"certificate_grip": {
+					Type:        framework.TypeString,
+					Description: "The internal grip used to identify the certificate that must be revoked / rolled over when the policy is not 'reuse'",
+				},
+			},
+			ExistenceCheck: b.pathExistenceCheck,
+			Operations: map[logical.Operation]framework.OperationHandler{
+				logical.CreateOperation: &framework.PathOperation{
+					Callback: b.certCreate,
+				},
 			},
 		},
 	}
@@ -44,74 +77,26 @@ func (b *backend) certCreate(ctx context.Context, req *logical.Request, data *fr
 		return nil, err
 	}
 
-	names := getNames(data)
-
-	path := "roles/" + data.Get("role").(string)
-	r, err := getRole(ctx, req.Storage, path)
+	names, err := getNames(data)
 	if err != nil {
 		return nil, err
 	}
-	if r == nil {
-		return logical.ErrorResponse("This role does not exists."), nil
+
+	roleName := data.Get("role").(string)
+	path := rolePrefix + roleName
+	r, err := getRole(ctx, req.Storage, path)
+	if err != nil {
+		return nil, err
 	}
 	if err = validateNames(b, r, names); err != nil {
 		return logical.ErrorResponse(err.Error()), nil
 	}
 
-	path = "accounts/" + r.Account
-	a, err := getAccount(ctx, req.Storage, path)
-	if err != nil {
-		return nil, err
+	if r.Managed {
+		return b.getManagedCertSecret(ctx, req, data, roleName, r, names)
+	} else {
+		return b.getUnmanagedCertSecret(ctx, req, roleName, r, names)
 	}
-	if a == nil {
-		return logical.ErrorResponse("This account does not exists"), nil
-	}
-	// Lookup cache
-	cacheKey, err := getCacheKey(r, data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cache key: %v", err)
-	}
-
-	var cert *certificate.Resource
-
-	// Let's first check the cache to see if a cert already exists
-	if !r.DisableCache {
-		b.cache.Lock()
-		defer b.cache.Unlock()
-		b.Logger().Debug("Look in the cache for a saved cert")
-		ce, err := b.cache.Read(ctx, req.Storage, r, cacheKey)
-		if err != nil {
-			return nil, err
-		}
-		if ce == nil {
-			b.Logger().Debug("Certificate not found in the cache")
-		} else {
-			cert = ce.Certificate()
-		}
-	}
-
-	// If we did not find a cert, we have to request one
-	if cert == nil {
-		b.Logger().Debug("Contacting the ACME provider to get a new certificate")
-		cert, err = getCertFromACMEProvider(ctx, b.Logger(), req, a, r, names)
-		if err != nil {
-			return logical.ErrorResponse("Failed to validate certificate signing request: %s", err), err
-		}
-		// Save the cert in the cache for the next request
-		if !r.DisableCache {
-			err = b.cache.Create(ctx, req.Storage, r, cacheKey, cert)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	s, err := b.getSecret(path, cacheKey, cert)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create the secret: %v", err)
-	}
-
-	return s, nil
 }
 
 func getCacheKey(r *role, data *framework.FieldData) (string, error) {
@@ -135,49 +120,18 @@ func getCacheKey(r *role, data *framework.FieldData) (string, error) {
 	return fmt.Sprintf("%s%x", cachePrefix, hashedKey), nil
 }
 
-func (b *backend) getSecret(accountPath, cacheKey string, cert *certificate.Resource) (*logical.Response, error) {
-	// Use the helper to create the secret
-	b.Logger().Debug("Preparing response")
-	certs, err := certcrypto.ParsePEMBundle(cert.Certificate)
-	if err != nil {
-		return nil, err
-	}
-
-	notBefore := certs[0].NotBefore
-	notAfter := certs[0].NotAfter
-
-	s := b.Secret(secretCertType).Response(
-		map[string]interface{}{
-			"domain":      cert.Domain,
-			"url":         cert.CertStableURL,
-			"private_key": string(cert.PrivateKey),
-			"cert":        string(cert.Certificate),
-			"issuer_cert": string(cert.IssuerCertificate),
-			"not_before":  notBefore.String(),
-			"not_after":   notAfter.String(),
-		},
-		// this will be used when revoking the certificate
-		map[string]interface{}{
-			"account":   accountPath,
-			"cert":      string(cert.Certificate),
-			"url":       cert.CertStableURL,
-			"cache_key": cacheKey,
-		})
-
-	s.Secret.MaxTTL = time.Until(notAfter)
-
-	return s, nil
-}
-
-func getNames(data *framework.FieldData) []string {
+func getNames(data *framework.FieldData) ([]string, error) {
+	commonName := data.Get("common_name").(string)
 	altNames := data.Get("alternative_names").([]string)
-	names := make([]string, len(altNames)+1)
-	names[0] = data.Get("common_name").(string)
-	for i, n := range altNames {
-		names[i+1] = n
+	slices.Sort(altNames)
+	if slices.Contains(altNames, commonName) {
+		return nil, fmt.Errorf("main domain cannot be specified again in alternative_names")
 	}
+	names := make([]string, len(altNames)+1)
+	names[0] = commonName
+	copy(names[1:], altNames)
 
-	return names
+	return names, nil
 }
 
 func validateNames(b logical.Backend, r *role, names []string) error {

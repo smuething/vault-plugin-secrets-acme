@@ -2,6 +2,8 @@ package acme
 
 import (
 	"context"
+	"crypto/x509"
+	"time"
 
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
@@ -21,6 +23,10 @@ func pathRoles(b *backend) []*framework.Path {
 		{
 			Pattern: "roles/" + framework.GenericNameRegex("role"),
 			Fields: map[string]*framework.FieldSchema{
+				"role": {
+					Type:     framework.TypeString,
+					Required: true,
+				},
 				"account": {
 					Type:     framework.TypeString,
 					Required: true,
@@ -34,20 +40,29 @@ func pathRoles(b *backend) []*framework.Path {
 				"allow_subdomains": {
 					Type: framework.TypeBool,
 				},
-				"disable_cache": {
-					Type: framework.TypeBool,
+				"managed": {
+					Type:    framework.TypeBool,
+					Default: true,
 				},
-				"cache_for_ratio": {
+				"rollover_time_percentage": {
 					Type:    framework.TypeInt,
 					Default: 70,
 				},
+				"rollover_window": {
+					Type: framework.TypeDurationSecond,
+				},
 				"key_type": {
 					Type:          framework.TypeString,
-					Default:       "",
 					AllowedValues: keyTypes,
 				},
-				"revoke_on_cache_expiry": {
+				"revoke_on_expiry": {
 					Type: framework.TypeBool,
+				},
+				"max_ttl": {
+					Type: framework.TypeDurationSecond,
+				},
+				"ttl": {
+					Type: framework.TypeDurationSecond,
 				},
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
@@ -70,33 +85,40 @@ func pathRoles(b *backend) []*framework.Path {
 }
 
 func (b *backend) roleCreateOrUpdate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("validating input")
 	if err := data.Validate(); err != nil {
 		return nil, err
 	}
 
-	cacheForRatio := data.Get("cache_for_ratio").(int)
-	if cacheForRatio <= 0 || cacheForRatio > 100 {
-		return logical.ErrorResponse("cache_for_ration should be greater than 0 and less than 100"), nil
+	rolloverTimePercentage := data.Get("rollover_time_percentage").(int)
+	if rolloverTimePercentage <= 0 || rolloverTimePercentage > 100 {
+		return logical.ErrorResponse("rollover_time_percentage should be greater than 0 and less than 100"), nil
 	}
 
 	r := role{
-		Account:             data.Get("account").(string),
-		AllowedDomains:      data.Get("allowed_domains").([]string),
-		AllowBareDomains:    data.Get("allow_bare_domains").(bool),
-		AllowSubdomains:     data.Get("allow_subdomains").(bool),
-		DisableCache:        data.Get("disable_cache").(bool),
-		CacheForRatio:       cacheForRatio,
-		KeyType:             data.Get("key_type").(string),
-		RevokeOnCacheExpiry: data.Get("revoke_on_cache_expiry").(bool),
+		Account:                data.Get("account").(string),
+		AllowedDomains:         data.Get("allowed_domains").([]string),
+		AllowBareDomains:       data.Get("allow_bare_domains").(bool),
+		AllowSubdomains:        data.Get("allow_subdomains").(bool),
+		Managed:                data.Get("managed").(bool),
+		RolloverTimePercentage: data.Get("rollover_time_percentage").(int),
+		RolloverWindow:         time.Duration(data.Get("rollover_window").(int)) * time.Second,
+		KeyType:                data.Get("key_type").(string),
+		RevokeOnExpiry:         data.Get("revoke_on_expiry").(bool),
+		MaxTTL:                 time.Duration(data.Get("max_ttl").(int)) * time.Second,
+		TTL:                    time.Duration(data.Get("ttl").(int)) * time.Second,
 	}
+	b.Logger().Info("saving role")
 	if err := r.save(ctx, req.Storage, req.Path); err != nil {
 		return nil, err
 	}
 
+	b.Logger().Info("reading role")
 	return b.roleRead(ctx, req, data)
 }
 
 func (b *backend) roleRead(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
+	b.Logger().Info("Retrieving role from storage")
 	r, err := getRole(ctx, req.Storage, req.Path)
 	if err != nil {
 		return nil, err
@@ -107,14 +129,17 @@ func (b *backend) roleRead(ctx context.Context, req *logical.Request, _ *framewo
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"account":                r.Account,
-			"allowed_domains":        r.AllowedDomains,
-			"allow_bare_domains":     r.AllowBareDomains,
-			"allow_subdomains":       r.AllowSubdomains,
-			"disable_cache":          r.DisableCache,
-			"cache_for_ratio":        r.CacheForRatio,
-			"key_type":               r.KeyType,
-			"revoke_on_cache_expiry": r.RevokeOnCacheExpiry,
+			"account":                  r.Account,
+			"allowed_domains":          r.AllowedDomains,
+			"allow_bare_domains":       r.AllowBareDomains,
+			"allow_subdomains":         r.AllowSubdomains,
+			"managed":                  r.Managed,
+			"rollover_time_percentage": r.RolloverTimePercentage,
+			"rollover_window":          int64(r.RolloverWindow.Seconds()),
+			"key_type":                 r.KeyType,
+			"revoke_on_expiry":         r.RevokeOnExpiry,
+			"max_ttl":                  int64(r.MaxTTL.Seconds()),
+			"ttl":                      int64(r.TTL.Seconds()),
 		},
 	}, nil
 }
@@ -133,14 +158,22 @@ func (b *backend) roleList(ctx context.Context, req *logical.Request, _ *framewo
 }
 
 type role struct {
-	Account             string
-	AllowedDomains      []string
-	AllowBareDomains    bool
-	AllowSubdomains     bool
-	DisableCache        bool
-	CacheForRatio       int
-	KeyType             string
-	RevokeOnCacheExpiry bool
+	Account                string
+	AllowedDomains         []string
+	AllowBareDomains       bool
+	AllowSubdomains        bool
+	Managed                bool
+	RolloverTimePercentage int
+	RolloverWindow         time.Duration
+	KeyType                string
+	RevokeOnExpiry         bool
+	MaxTTL                 time.Duration
+	TTL                    time.Duration
+}
+
+func (r *role) RolloverAfter(cert *x509.Certificate) time.Time {
+	certTTL := float64(cert.NotAfter.Sub(cert.NotBefore))
+	return cert.NotBefore.Add(time.Duration(certTTL * float64(r.RolloverTimePercentage) / 100.0))
 }
 
 func getRole(ctx context.Context, storage logical.Storage, path string) (*role, error) {

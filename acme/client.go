@@ -14,7 +14,14 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func getCertFromACMEProvider(ctx context.Context, logger log.Logger, req *logical.Request, a *account, r *role, names []string) (*certificate.Resource, error) {
+func getCertFromACMEProvider(ctx context.Context, logger log.Logger, req *logical.Request, r *role, names []string) (*certificate.Resource, error) {
+
+	accountPath := accountPrefix + r.Account
+	a, err := getAccount(ctx, req.Storage, accountPath)
+	if err != nil {
+		return nil, err
+	}
+
 	client, err := a.getClient()
 	if err != nil {
 		return nil, err

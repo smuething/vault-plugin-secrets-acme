@@ -32,47 +32,58 @@ func pathAccounts(b *backend) []*framework.Path {
 			Pattern: "accounts/" + framework.GenericNameRegex("account"),
 			Fields: map[string]*framework.FieldSchema{
 				"account": {
-					Type:     framework.TypeString,
-					Required: true,
+					Type:        framework.TypeString,
+					Required:    true,
+					Description: "The name of thie account",
 				},
 				"server_url": {
 					Type: framework.TypeString,
 					// Required is only used in the documentation for now
-					Required: true,
+					Required:    true,
+					Description: "The ACME server URL",
 				},
 				"terms_of_service_agreed": {
-					Type:    framework.TypeBool,
-					Default: false,
+					Type:        framework.TypeBool,
+					Default:     false,
+					Description: "Boolean indicating that you agree to the terms of service of the ACME provider",
 				},
 				"key_type": {
 					Type:          framework.TypeString,
 					Default:       "EC256",
 					AllowedValues: keyTypes,
+					Description:   "[Optional] The private key type to use for the account certificate",
 				},
 				// TODO(remi): We should have a list of those so we can request certs
 				// for domains registred to different providers
 				"provider": {
-					Type: framework.TypeString,
+					Type:        framework.TypeString,
+					Description: "The name of the LEGO DNS provider",
 				},
 				"provider_configuration": {
-					Type: framework.TypeKVPairs,
+					Type:        framework.TypeKVPairs,
+					Description: "Configuration for the DNS provider. Can be supplied multiple times if more than one argument is required.",
 				},
 				"enable_http_01": {
-					Type: framework.TypeBool,
+					Type:        framework.TypeBool,
+					Description: "Flag controlling whether the account uses HTTP-01 challenges for authorization",
 				},
 				"enable_tls_alpn_01": {
-					Type: framework.TypeBool,
+					Type:        framework.TypeBool,
+					Description: "Flag controlling whether the account uses ALPN-01 challenges for authorization",
 				},
 				"dns_resolvers": {
-					Type: framework.TypeStringSlice,
+					Type:        framework.TypeStringSlice,
+					Description: "A list of DNS servers to check for propagation of the DNS challenge",
 				},
 				"ignore_dns_propagation": {
-					Type:    framework.TypeBool,
-					Default: false,
+					Type:        framework.TypeBool,
+					Default:     false,
+					Description: "A LEGO flag that controls whether LEGO will follow the DNS lookup chain to the authoritative server (I think)",
 				},
 				"contact": {
-					Type:     framework.TypeString,
-					Required: true,
+					Type:        framework.TypeString,
+					Required:    true,
+					Description: "The contact email for this account",
 				},
 			},
 			ExistenceCheck: b.pathExistenceCheck,
@@ -187,10 +198,6 @@ func (b *backend) accountWrite(ctx context.Context, req *logical.Request, data *
 		return logical.ErrorResponse(err.Error()), nil
 	}
 	user.Registration = reg
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to create storage entry: %w", err)
-	}
 
 	b.Logger().Info("Saving account")
 	if err = user.save(ctx, req.Storage, req.Path, serverURL); err != nil {

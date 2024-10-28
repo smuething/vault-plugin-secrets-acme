@@ -8,6 +8,12 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
+const cachePrefix = "cache/"
+const rolePrefix = "roles/"
+const accountPrefix = "accounts/"
+const secretManagedCertType = "managed-cert"
+const secretUnmanagedCertType = "unmanaged-cert"
+
 type backend struct {
 	*framework.Backend
 	cache *Cache
@@ -23,18 +29,19 @@ func Factory(version string) logical.Factory {
 		b.Backend = &framework.Backend{
 			BackendType: logical.TypeLogical,
 			Secrets: []*framework.Secret{
-				secretCert(&b),
+				secretManagedCert(&b),
+				secretUnmanagedCert(&b),
 			},
 			Paths: framework.PathAppend(
 				pathAccounts(&b),
 				pathRoles(&b),
-				[]*framework.Path{
-					pathCerts(&b),
-					pathChallenges(&b),
-					pathCache(&b),
-				},
+				pathCerts(&b),
+				pathChallenges(&b),
+				pathCache(&b),
 			),
 		}
+
+		b.Logger()
 
 		if version != "" {
 			b.Backend.RunningVersion = fmt.Sprintf("v%s", version)
@@ -49,6 +56,7 @@ func Factory(version string) logical.Factory {
 }
 
 func (b *backend) pathExistenceCheck(ctx context.Context, req *logical.Request, _ *framework.FieldData) (bool, error) {
+	b.Logger().Debug("Checking path existence", "req.Path", req.Path)
 	out, err := req.Storage.Get(ctx, req.Path)
 	if err != nil {
 		return false, fmt.Errorf("existence check failed: %w", err)
