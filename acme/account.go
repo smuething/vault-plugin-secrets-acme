@@ -48,8 +48,8 @@ func (a *account) getClient() (*lego.Client, error) {
 	return lego.NewClient(config)
 }
 
-func getAccount(ctx context.Context, storage logical.Storage, path string) (*account, error) {
-	storageEntry, err := storage.Get(ctx, path)
+func getAccount(ctx context.Context, storage logical.Storage, name string) (*account, error) {
+	storageEntry, err := storage.Get(ctx, accountPrefix+name)
 	if err != nil {
 		return nil, err
 	}
@@ -99,14 +99,14 @@ func getAccount(ctx context.Context, storage logical.Storage, path string) (*acc
 	return a, nil
 }
 
-func (a *account) save(ctx context.Context, storage logical.Storage, path string, serverURL string) error {
+func (a *account) save(ctx context.Context, storage logical.Storage, name string, serverURL string) error {
 	x509Encoded, err := x509.MarshalPKCS8PrivateKey(a.Key)
 	if err != nil {
 		return err
 	}
 	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
 
-	storageEntry, err := logical.StorageEntryJSON(path, map[string]interface{}{
+	storageEntry, err := logical.StorageEntryJSON(accountPrefix+name, map[string]interface{}{
 		"server_url":              serverURL,
 		"registration_uri":        a.Registration.URI,
 		"contact":                 a.GetEmail(),

@@ -29,9 +29,9 @@ func pathAccounts(b *backend) []*framework.Path {
 			},
 		},
 		{
-			Pattern: "accounts/" + framework.GenericNameRegex("account"),
+			Pattern: "accounts/" + framework.GenericNameRegex("name"),
 			Fields: map[string]*framework.FieldSchema{
-				"account": {
+				"name": {
 					Type:        framework.TypeString,
 					Required:    true,
 					Description: "The name of thie account",
@@ -126,6 +126,7 @@ func (b *backend) accountWrite(ctx context.Context, req *logical.Request, data *
 	if err := data.Validate(); err != nil {
 		return nil, err
 	}
+	name := data.Get("name").(string)
 	serverURL := data.Get("server_url").(string)
 	contact := data.Get("contact").(string)
 	termsOfServiceAgreed := data.Get("terms_of_service_agreed").(bool)
@@ -137,7 +138,7 @@ func (b *backend) accountWrite(ctx context.Context, req *logical.Request, data *
 	ignoreDNSPropagation := data.Get("ignore_dns_propagation").(bool)
 
 	var update bool
-	user, err := getAccount(ctx, req.Storage, req.Path)
+	user, err := getAccount(ctx, req.Storage, name)
 	if err != nil {
 		return nil, err
 	}
@@ -207,8 +208,9 @@ func (b *backend) accountWrite(ctx context.Context, req *logical.Request, data *
 	return b.accountRead(ctx, req, data)
 }
 
-func (b *backend) accountRead(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	a, err := getAccount(ctx, req.Storage, req.Path)
+func (b *backend) accountRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	name := data.Get("name").(string)
+	a, err := getAccount(ctx, req.Storage, name)
 	if err != nil {
 		return nil, err
 	}
@@ -233,8 +235,9 @@ func (b *backend) accountRead(ctx context.Context, req *logical.Request, _ *fram
 	}, nil
 }
 
-func (b *backend) accountDelete(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	a, err := getAccount(ctx, req.Storage, req.Path)
+func (b *backend) accountDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	name := data.Get("name").(string)
+	a, err := getAccount(ctx, req.Storage, name)
 	if err != nil {
 		return nil, err
 	}
