@@ -162,17 +162,17 @@ func (b *backend) roleList(ctx context.Context, req *logical.Request, _ *framewo
 }
 
 type role struct {
-	Account                string
-	AllowedDomains         []string
-	AllowBareDomains       bool
-	AllowSubdomains        bool
-	Managed                bool
-	RolloverTimePercentage int
-	RolloverWindow         time.Duration
-	KeyType                string
-	RevokeOnExpiry         bool
-	MaxTTL                 time.Duration
-	TTL                    time.Duration
+	Account                string        `json:"account"`
+	AllowedDomains         []string      `json:"allowed_domains"`
+	AllowBareDomains       bool          `json:"allow_bare_domains"`
+	AllowSubdomains        bool          `json:"allow_subdomains"`
+	Managed                bool          `json:"managed"`
+	RolloverTimePercentage int           `json:"rollover_time_percentage"`
+	RolloverWindow         time.Duration `json:"rollover_window"`
+	KeyType                string        `json:"key_type"`
+	RevokeOnExpiry         bool          `json:"revoke_on_expiry"`
+	MaxTTL                 time.Duration `json:"max_ttl"`
+	TTL                    time.Duration `json:"ttl"`
 }
 
 func (r *role) RolloverAfter(cert *x509.Certificate) time.Time {

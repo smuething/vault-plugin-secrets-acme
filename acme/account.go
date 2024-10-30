@@ -12,18 +12,18 @@ import (
 )
 
 type account struct {
-	Email                 string
-	Registration          *registration.Resource
-	Key                   crypto.PrivateKey
-	KeyType               string
-	ServerURL             string
-	Provider              string
-	ProviderConfiguration map[string]string
-	EnableHTTP01          bool
-	EnableTLSALPN01       bool
-	TermsOfServiceAgreed  bool
-	DNSResolvers          []string
-	IgnoreDNSPropagation  bool
+	Email                 string                 `json:"email,omitempty"`
+	Registration          *registration.Resource `json:"registration,omitempty"`
+	Key                   crypto.PrivateKey      `json:"key,omitempty"`
+	KeyType               string                 `json:"key_type,omitempty"`
+	ServerURL             string                 `json:"server_url,omitempty"`
+	Provider              string                 `json:"provider,omitempty"`
+	ProviderConfiguration map[string]string      `json:"provider_configuration,omitempty"`
+	EnableHTTP01          bool                   `json:"enable_http_01,omitempty"`
+	EnableTLSALPN01       bool                   `json:"enable_tlsalpn_01,omitempty"`
+	TermsOfServiceAgreed  bool                   `json:"terms_of_service_agreed,omitempty"`
+	DNSResolvers          []string               `json:"dns_resolvers,omitempty"`
+	IgnoreDNSPropagation  bool                   `json:"ignore_dns_propagation,omitempty"`
 }
 
 // GetEmail returns the Email of the user

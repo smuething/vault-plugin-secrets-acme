@@ -22,29 +22,29 @@ func NewCache() *Cache {
 }
 
 type CachedCertificate struct {
-	Leases            int
-	Domain            string
-	CertURL           string
-	CertStableURL     string
-	PrivateKey        []byte
-	Cert              []byte
-	IssuerCertificate []byte
-	CSR               []byte
-	NotAfter          time.Time
-	RolloverAfter     time.Time
-	RevokeOnEviction  bool
-	Rollover          bool
+	Leases            int       `json:"leases"`
+	Domain            string    `json:"domain"`
+	CertURL           string    `json:"cert_url,omitempty"`
+	CertStableURL     string    `json:"cert_stable_url,omitempty"`
+	PrivateKey        []byte    `json:"private_key,omitempty"`
+	Cert              []byte    `json:"cert,omitempty"`
+	IssuerCertificate []byte    `json:"issuer_certificate,omitempty"`
+	CSR               []byte    `json:"csr,omitempty"`
+	NotAfter          time.Time `json:"not_after,omitempty"`
+	RolloverAfter     time.Time `json:"rollover_after,omitempty"`
+	RevokeOnEviction  bool      `json:"revoke_on_eviction,omitempty"`
+	Rollover          bool      `json:"rollover,omitempty"`
 }
 
 type CacheEntry struct {
-	Leases  int
-	Account string
-	Role    string
-	Domain  string
-	Domains []string
+	Leases  int      `json:"leases"`
+	Account string   `json:"account"`
+	Role    string   `json:"role"`
+	Domain  string   `json:"domain"`
+	Domains []string `json:"domains"`
 
 	// cached certificates, indexed by the certificate serial number
-	Certificates map[string]*CachedCertificate
+	Certificates map[string]*CachedCertificate `json:"certificates"`
 }
 
 func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *CacheEntry {
