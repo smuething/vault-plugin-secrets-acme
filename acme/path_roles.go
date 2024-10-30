@@ -21,10 +21,10 @@ func pathRoles(b *backend) []*framework.Path {
 			},
 		},
 		{
-			Pattern: "roles/" + framework.GenericNameRegex("role"),
+			Pattern: "roles/" + framework.GenericNameRegex("name"),
 			Fields: map[string]*framework.FieldSchema{
-				"role": {
-					Type:     framework.TypeString,
+				"name": {
+					Type:     framework.TypeLowerCaseString,
 					Required: true,
 				},
 				"account": {
@@ -85,6 +85,8 @@ func pathRoles(b *backend) []*framework.Path {
 }
 
 func (b *backend) roleCreateOrUpdate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+
+	name := data.Get("name").(string)
 	b.Logger().Info("validating input")
 	if err := data.Validate(); err != nil {
 		return nil, err
@@ -109,7 +111,7 @@ func (b *backend) roleCreateOrUpdate(ctx context.Context, req *logical.Request, 
 		TTL:                    time.Duration(data.Get("ttl").(int)) * time.Second,
 	}
 	b.Logger().Info("saving role")
-	if err := r.save(ctx, req.Storage, req.Path); err != nil {
+	if err := r.save(ctx, req.Storage, name); err != nil {
 		return nil, err
 	}
 
@@ -117,9 +119,11 @@ func (b *backend) roleCreateOrUpdate(ctx context.Context, req *logical.Request, 
 	return b.roleRead(ctx, req, data)
 }
 
-func (b *backend) roleRead(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
+func (b *backend) roleRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	b.Logger().Info("Retrieving role from storage")
-	r, err := getRole(ctx, req.Storage, req.Path)
+	name := data.Get("name").(string)
+
+	r, err := getRole(ctx, req.Storage, name)
 	if err != nil {
 		return nil, err
 	}
@@ -135,11 +139,11 @@ func (b *backend) roleRead(ctx context.Context, req *logical.Request, _ *framewo
 			"allow_subdomains":         r.AllowSubdomains,
 			"managed":                  r.Managed,
 			"rollover_time_percentage": r.RolloverTimePercentage,
-			"rollover_window":          int64(r.RolloverWindow.Seconds()),
+			"rollover_window":          r.RolloverWindow.Seconds(),
 			"key_type":                 r.KeyType,
 			"revoke_on_expiry":         r.RevokeOnExpiry,
-			"max_ttl":                  int64(r.MaxTTL.Seconds()),
-			"ttl":                      int64(r.TTL.Seconds()),
+			"max_ttl":                  r.MaxTTL.Seconds(),
+			"ttl":                      r.TTL.Seconds(),
 		},
 	}, nil
 }
@@ -149,7 +153,7 @@ func (b *backend) roleDelete(ctx context.Context, req *logical.Request, _ *frame
 }
 
 func (b *backend) roleList(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	entries, err := req.Storage.List(ctx, "roles/")
+	entries, err := req.Storage.List(ctx, rolePrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -176,8 +180,9 @@ func (r *role) RolloverAfter(cert *x509.Certificate) time.Time {
 	return cert.NotBefore.Add(time.Duration(certTTL * float64(r.RolloverTimePercentage) / 100.0))
 }
 
-func getRole(ctx context.Context, storage logical.Storage, path string) (*role, error) {
-	storageEntry, err := storage.Get(ctx, path)
+func getRole(ctx context.Context, storage logical.Storage, name string) (*role, error) {
+
+	storageEntry, err := storage.Get(ctx, rolePrefix+name)
 	if err != nil {
 		return nil, err
 	}
@@ -200,14 +205,14 @@ func getRole(ctx context.Context, storage logical.Storage, path string) (*role, 
 	return r, nil
 }
 
-func (r *role) save(ctx context.Context, storage logical.Storage, path string) error {
+func (r *role) save(ctx context.Context, storage logical.Storage, name string) error {
 	var data map[string]interface{}
 	err := mapstructure.Decode(r, &data)
 	if err != nil {
 		return err
 	}
 
-	storageEntry, err := logical.StorageEntryJSON(path, data)
+	storageEntry, err := logical.StorageEntryJSON(rolePrefix+name, data)
 	if err != nil {
 		return err
 	}

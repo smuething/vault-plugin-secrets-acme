@@ -16,8 +16,7 @@ import (
 
 func getCertFromACMEProvider(ctx context.Context, logger log.Logger, req *logical.Request, r *role, names []string) (*certificate.Resource, error) {
 
-	accountPath := accountPrefix + r.Account
-	a, err := getAccount(ctx, req.Storage, accountPath)
+	a, err := getAccount(ctx, req.Storage, r.Account)
 	if err != nil {
 		return nil, err
 	}

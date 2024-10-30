@@ -338,7 +338,7 @@ func (b *backend) managedCertRenew(ctx context.Context, req *logical.Request, _ 
 		return nil, err
 	}
 
-	role, err := getRole(ctx, req.Storage, rolePrefix+ce.Role)
+	role, err := getRole(ctx, req.Storage, ce.Role)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +388,7 @@ func (ce *CacheEntry) revokeCachedCertificate(ctx context.Context, req *logical.
 		return nil
 	}
 
-	r, err := getRole(ctx, req.Storage, rolePrefix+ce.Role)
+	r, err := getRole(ctx, req.Storage, ce.Role)
 	if err != nil {
 		return err
 	}
