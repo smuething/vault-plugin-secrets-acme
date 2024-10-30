@@ -219,7 +219,25 @@ func (b *backend) roleList(ctx context.Context, req *logical.Request, _ *framewo
 		return nil, err
 	}
 
-	return logical.ListResponse(entries), nil
+	info := make(map[string]any)
+	for _, key := range entries {
+		role, err := getRole(ctx, req.Storage, key)
+		if err != nil {
+			return nil, err
+		}
+		if role == nil {
+			continue
+		}
+		info[key] = &map[string]any{
+			"Managed":         role.Managed,
+			"Account":         role.Account,
+			"Allowed domains": role.AllowedDomains,
+			"Key type":        role.KeyType,
+			"TTL":             role.TTL.String(),
+		}
+	}
+
+	return logical.ListResponseWithInfo(entries, info), nil
 }
 
 type role struct {
