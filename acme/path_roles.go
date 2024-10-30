@@ -2,12 +2,21 @@ package acme
 
 import (
 	"context"
-	"crypto/x509"
+	"math/rand/v2"
 	"time"
 
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/mitchellh/mapstructure"
+)
+
+type CertificateState int
+
+const (
+	ACTIVE CertificateState = iota
+	START_ROLL_OVER
+	ROLLING_OVER
+	EXPIRED
 )
 
 func pathRoles(b *backend) []*framework.Path {
@@ -254,9 +263,22 @@ type role struct {
 	TTL                    time.Duration `json:"ttl"`
 }
 
-func (r *role) RolloverAfter(cert *x509.Certificate) time.Time {
+func (r *role) CertificateState(cert *CachedCertificate) (CertificateState, time.Duration) {
+	now := time.Now()
+	if now.After(cert.NotAfter) {
+		return EXPIRED, 0
+	}
+	if cert.Rollover {
+		return ROLLING_OVER, 0
+	}
 	certTTL := float64(cert.NotAfter.Sub(cert.NotBefore))
-	return cert.NotBefore.Add(time.Duration(certTTL * float64(r.RolloverTimePercentage) / 100.0))
+	rolloverTime := cert.NotAfter.Add(time.Duration(certTTL*float64(r.RolloverTimePercentage)/100.0) * time.Second)
+	rolloverWindowStart := rolloverTime.Add(-r.RolloverWindow)
+	if now.After(rolloverWindowStart) {
+		return START_ROLL_OVER, 0
+	}
+	maxTTL := rolloverWindowStart.Add(rand.N(r.RolloverWindow)).Sub(now)
+	return ACTIVE, maxTTL
 }
 
 func getRole(ctx context.Context, storage logical.Storage, name string) (*role, error) {

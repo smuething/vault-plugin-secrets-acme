@@ -56,33 +56,28 @@ func (r *role) getActiveCertificateThumbprint(b *backend, ce *CacheEntry) (strin
 	var rollover_thumbprint = ""
 	// try to find active certificate
 	for thumbprint, cc := range ce.Certificates {
-		b.Logger().Debug("Looking at certificate", "thumbprint", thumbprint, "rollover", cc.Rollover, "rolloverAfter", cc.RolloverAfter)
-		if cc.Rollover {
-			continue
-		}
-		if cc.RolloverAfter.Add(-r.RolloverWindow).Before(time.Now()) {
-			// set this certificate to roll over and return its thumbprint (for renewal)
+		b.Logger().Debug("Looking at certificate", "thumbprint", thumbprint)
+		state, _ := r.CertificateState(cc)
+		switch state {
+		case ACTIVE:
+			if active_thumbprint != "" {
+				panic("There must never be more than one active certificate for each cache key")
+			}
+			active_thumbprint = thumbprint
+		case START_ROLL_OVER:
 			cc.Rollover = true
 			rollover_thumbprint = thumbprint
-			continue
 		}
-		if active_thumbprint != "" {
-			panic("There must never be more than one active certificate for each cache key")
-		}
-		active_thumbprint = thumbprint
 	}
 	return active_thumbprint, rollover_thumbprint
 }
 
 func (b *backend) buildManagedCertSecret(_ *logical.Request, roleName string, role *role, cacheKey string, cc *CachedCertificate) (*logical.Response, error) {
 
-	certs, err := certcrypto.ParsePEMBundle(cc.Cert)
-	if err != nil {
-		return nil, err
+	state, maxTTL := role.CertificateState(cc)
+	if state != ACTIVE {
+		return nil, fmt.Errorf("Can only build secret from certificate in state ACTIVE")
 	}
-
-	notBefore := certs[0].NotBefore
-	notAfter := certs[0].NotAfter
 
 	s := b.Secret(secretManagedCertType).Response(
 		map[string]interface{}{
@@ -93,33 +88,24 @@ func (b *backend) buildManagedCertSecret(_ *logical.Request, roleName string, ro
 			"private_key": string(cc.PrivateKey),
 			"cert":        string(cc.Cert),
 			"issuer_cert": string(cc.IssuerCertificate),
-			"not_before":  notBefore.String(),
-			"not_after":   notAfter.String(),
+			"not_before":  cc.NotBefore.String(),
+			"not_after":   cc.NotAfter.String(),
 			"thumbprint":  cc.Thumbprint,
 		},
 		// this will be used when revoking the certificate
 		map[string]interface{}{
 			"cache_key":  cacheKey,
-			"thumbprint": GetSHA256Thumbprint(certs[0]),
+			"thumbprint": cc.Thumbprint,
 		})
 
-	s.Secret.MaxTTL = max(0, time.Until(cc.RolloverAfter))
-
-	if role.MaxTTL > 0 {
-		s.Secret.MaxTTL = min(s.Secret.MaxTTL, role.MaxTTL)
-	}
-
-	s.Secret.TTL = s.Secret.MaxTTL
+	s.Secret.MaxTTL = role.MaxTTL
 
 	if role.TTL > 0 {
-		s.Secret.TTL = min(
-			s.Secret.TTL,
-			s.Secret.MaxTTL,
-			role.TTL,
-		)
-
-		s.Secret.Increment = role.TTL
+		s.Secret.TTL = min(role.TTL, maxTTL)
+	} else {
+		s.Secret.TTL = maxTTL
 	}
+	s.Secret.Increment = s.Secret.TTL
 
 	b.Logger().Debug("secret prepared", "TTL", s.Secret.TTL, "MaxTTL", s.Secret.MaxTTL)
 
@@ -257,8 +243,8 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 						Cert:              cert.Certificate,
 						IssuerCertificate: cert.IssuerCertificate,
 						CSR:               cert.CSR,
+						NotBefore:         certs[0].NotBefore,
 						NotAfter:          certs[0].NotAfter,
-						RolloverAfter:     role.RolloverAfter(certs[0]),
 						RevokeOnEviction:  role.RevokeOnExpiry,
 						Rollover:          false,
 					}
@@ -304,10 +290,11 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 				Cert:              cert.Certificate,
 				IssuerCertificate: cert.IssuerCertificate,
 				CSR:               cert.CSR,
+				NotBefore:         certs[0].NotBefore,
 				NotAfter:          certs[0].NotAfter,
-				RolloverAfter:     role.RolloverAfter(certs[0]),
 				RevokeOnEviction:  role.RevokeOnExpiry,
 				Rollover:          false,
+				Thumbprint:        GetSHA256Thumbprint(certs[0]),
 			}
 
 		}
@@ -334,9 +321,9 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 }
 
 func (b *backend) managedCertRenew(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	resp := &logical.Response{Secret: req.Secret}
 	b.cache.Lock()
 	defer b.cache.Unlock()
+	resp := &logical.Response{Secret: req.Secret}
 
 	cacheKey := req.Secret.InternalData["cache_key"].(string)
 	thumbprint := req.Secret.InternalData["thumbprint"].(string)
@@ -344,6 +331,9 @@ func (b *backend) managedCertRenew(ctx context.Context, req *logical.Request, _ 
 	ce, err := b.cache.Read(ctx, req.Storage, cacheKey)
 	if err != nil {
 		return nil, err
+	}
+	if ce == nil {
+		return nil, fmt.Errorf("secret data not found in cache, request a new one")
 	}
 
 	role, err := getRole(ctx, req.Storage, ce.Role)
@@ -361,24 +351,19 @@ func (b *backend) managedCertRenew(ctx context.Context, req *logical.Request, _ 
 		return nil, fmt.Errorf("certificate rollover")
 	}
 
-	if cc.RolloverAfter.Before(time.Now().Add(-role.RolloverWindow)) {
+	state, maxTTL := role.CertificateState(cc)
+	if state != ACTIVE {
 		// we are in the rollover window, client must request a new certificate
 		return nil, fmt.Errorf("certificate rollover")
 	}
 
-	// Increment TTL by the minimum of the requested duration, the duration specified in the role,
-	// the max TTL specified in the role and the rollover time of the certificate
 	resp.Secret.TTL = min(
 		req.Secret.Increment,
-		max(0, time.Until(cc.RolloverAfter)),
+		maxTTL,
 	)
 
 	if role.TTL > 0 {
 		resp.Secret.TTL = min(resp.Secret.TTL, role.TTL)
-	}
-
-	if role.MaxTTL > 0 {
-		resp.Secret.TTL = min(resp.Secret.TTL, max(0, time.Until(req.Secret.IssueTime.Add(role.MaxTTL))))
 	}
 
 	return resp, nil

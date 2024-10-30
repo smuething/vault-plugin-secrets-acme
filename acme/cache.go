@@ -30,8 +30,8 @@ type CachedCertificate struct {
 	Cert              []byte    `json:"cert,omitempty"`
 	IssuerCertificate []byte    `json:"issuer_certificate,omitempty"`
 	CSR               []byte    `json:"csr,omitempty"`
+	NotBefore         time.Time `json:"not_before,omitempty"`
 	NotAfter          time.Time `json:"not_after,omitempty"`
-	RolloverAfter     time.Time `json:"rollover_after,omitempty"`
 	RevokeOnEviction  bool      `json:"revoke_on_eviction,omitempty"`
 	Rollover          bool      `json:"rollover,omitempty"`
 	Thumbprint        string    `json:"thumbprint"`
@@ -71,8 +71,8 @@ func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *Ca
 				Cert:              cert.Certificate,
 				IssuerCertificate: cert.IssuerCertificate,
 				CSR:               cert.CSR,
+				NotBefore:         certs[0].NotBefore,
 				NotAfter:          certs[0].NotAfter,
-				RolloverAfter:     role.RolloverAfter(certs[0]),
 				RevokeOnEviction:  role.RevokeOnExpiry,
 				Rollover:          false,
 				Thumbprint:        GetSHA256Thumbprint(certs[0]),
