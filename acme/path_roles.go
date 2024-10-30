@@ -26,43 +26,104 @@ func pathRoles(b *backend) []*framework.Path {
 				"name": {
 					Type:     framework.TypeLowerCaseString,
 					Required: true,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Name",
+						Description: "The name of the role",
+						Value:       "role-name",
+					},
 				},
 				"account": {
 					Type:     framework.TypeString,
 					Required: true,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Account",
+						Description: "The account ACME account that will be used to request certificates",
+						Value:       "<account>",
+					},
 				},
 				"allowed_domains": {
 					Type: framework.TypeCommaStringSlice,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Allowed domains",
+						Description: "The domains for which this role is allowed to request certificates",
+						Value:       "example.com,example.org",
+					},
 				},
 				"allow_bare_domains": {
 					Type: framework.TypeBool,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Allow bare domains",
+						Description: "Is it allowed to obtain certificates for the domains listed in allowed_domains themselves?",
+						Value:       "false",
+					},
 				},
 				"allow_subdomains": {
 					Type: framework.TypeBool,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Allow subdomains",
+						Description: "Is it alloweed to obtain certificates for subdomains of the domains listed in allowed_domains?",
+						Value:       "true",
+					},
 				},
 				"managed": {
-					Type:    framework.TypeBool,
-					Default: true,
+					Type:     framework.TypeBool,
+					Required: true,
+					Default:  true,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Create managed certificates",
+						Description: "Managed certificates are cached by the plugin and support controlled rollover and revocation. You almost certainly want this!",
+						Value:       "true",
+					},
 				},
 				"rollover_time_percentage": {
 					Type:    framework.TypeInt,
 					Default: 70,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Rollover time percentage",
+						Description: "Percentage of certificate validity after which rollover should occur. Only applicable to managed certificats.",
+						Value:       "70",
+					},
 				},
 				"rollover_window": {
 					Type: framework.TypeDurationSecond,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Rollover window",
+						Description: "Length of additional rollover window.",
+						Value:       "1d",
+					},
 				},
 				"key_type": {
 					Type:          framework.TypeString,
 					AllowedValues: keyTypes,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Key Type",
+						Description: "Private key type of requested certificates, e.g. EC256",
+						Value:       "EC256",
+					},
 				},
 				"revoke_on_expiry": {
 					Type: framework.TypeBool,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Revoke on expiry",
+						Description: "Whether to revoke managed certificates on cache expiry.",
+						Value:       "false",
+					},
 				},
 				"max_ttl": {
 					Type: framework.TypeDurationSecond,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Max TTL",
+						Description: "The maximum TTL for managed certificates.",
+						Value:       "",
+					},
 				},
 				"ttl": {
 					Type: framework.TypeDurationSecond,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "TTL",
+						Description: "The TTL of managed certificates.",
+						Value:       "",
+					},
 				},
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
