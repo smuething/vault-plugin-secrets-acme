@@ -30,7 +30,6 @@ func Factory(version string) logical.Factory {
 			BackendType: logical.TypeLogical,
 			Secrets: []*framework.Secret{
 				secretManagedCert(&b),
-				secretUnmanagedCert(&b),
 			},
 			Paths: framework.PathAppend(
 				pathAccounts(&b),

@@ -87,7 +87,7 @@ func (b *backend) certCreate(ctx context.Context, req *logical.Request, data *fr
 	if r.Managed {
 		return b.getManagedCertSecret(ctx, req, data, roleName, r, names)
 	} else {
-		return b.getUnmanagedCertSecret(ctx, req, roleName, r, names)
+		return b.getUnmanagedCert(ctx, req, roleName, r, names)
 	}
 }
 
