@@ -121,7 +121,7 @@ func (b *backend) buildManagedCertSecret(_ *logical.Request, roleName string, ro
 		s.Secret.Increment = role.TTL
 	}
 
-	b.Logger().Warn("secret prepared", "TTL", s.Secret.TTL, "MaxTTL", s.Secret.MaxTTL)
+	b.Logger().Debug("secret prepared", "TTL", s.Secret.TTL, "MaxTTL", s.Secret.MaxTTL)
 
 	return s, nil
 }
@@ -144,7 +144,7 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 		return nil, fmt.Errorf("failed to get cache key: %w", err)
 	}
 
-	b.Logger().Warn("Got cachekey", "cacheKey", cacheKey)
+	b.Logger().Debug("Got cachekey", "cacheKey", cacheKey)
 
 	b.cache.Lock()
 	defer b.cache.Unlock()
@@ -160,7 +160,7 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 
 	if ce == nil {
 
-		b.Logger().Warn("No cache entry, creating one")
+		b.Logger().Debug("No cache entry, creating one")
 
 		// certificate is not cached, we have to request a new one
 		cert, err = getCertFromACMEProvider(ctx, b.Logger(), req, role, names)
@@ -170,16 +170,16 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 
 		ce = b.cache.Create(ctx, req.Storage, roleName, role, cacheKey, cert)
 
-		b.Logger().Warn("cache entry created", "num_certs", len(ce.Certificates), "ce", ce)
+		b.Logger().Debug("cache entry created", "num_certs", len(ce.Certificates), "ce", ce)
 
 		// get the active thumbprint (there is only one)
 		for t := range ce.Certificates {
-			b.Logger().Warn("thumbprint", "t", t)
+			b.Logger().Debug("thumbprint", "t", t)
 			active_thumbprint = t
 		}
 	} else {
 
-		b.Logger().Warn("Found cache entry")
+		b.Logger().Debug("Found cache entry")
 
 		switch policy {
 		case POLICY_REUSE:
