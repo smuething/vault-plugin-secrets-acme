@@ -22,14 +22,6 @@ const (
 func pathCerts(b *backend) []*framework.Path {
 	return []*framework.Path{
 		{
-			Pattern: "certs/?",
-			Operations: map[logical.Operation]framework.OperationHandler{
-				logical.ListOperation: &framework.PathOperation{
-					Callback: b.cacheList,
-				},
-			},
-		},
-		{
 			Pattern: "certs/" + framework.GenericNameRegex("role"),
 			Fields: map[string]*framework.FieldSchema{
 				"role": {

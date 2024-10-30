@@ -10,16 +10,8 @@ import (
 func pathCache(b *backend) []*framework.Path {
 	return []*framework.Path{
 		{
-			Pattern: "cache",
-			Fields: map[string]*framework.FieldSchema{
-				"cached_certs": {
-					Type: framework.TypeInt,
-				},
-			},
+			Pattern: "cache/?$",
 			Operations: map[logical.Operation]framework.OperationHandler{
-				logical.ReadOperation: &framework.PathOperation{
-					Callback: b.cacheRead,
-				},
 				logical.DeleteOperation: &framework.PathOperation{
 					Callback: b.cacheClear,
 				},
@@ -29,21 +21,6 @@ func pathCache(b *backend) []*framework.Path {
 			},
 		},
 	}
-}
-
-func (b *backend) cacheRead(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	b.cache.Lock()
-	defer b.cache.Unlock()
-	keys, err := b.cache.List(ctx, req.Storage)
-	if err != nil {
-		return logical.ErrorResponse("failed to read cache"), err
-	}
-
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"cached_certs": len(keys),
-		},
-	}, nil
 }
 
 func (b *backend) cacheClear(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
@@ -76,7 +53,7 @@ func (b *backend) cacheList(ctx context.Context, req *logical.Request, _ *framew
 		if ce == nil {
 			continue
 		}
-		keyInfo[key] = map[string]interface{}{
+		keyInfo[key] = &map[string]interface{}{
 			"account":        ce.Account,
 			"role":           ce.Role,
 			"primary_domain": ce.Domain,
