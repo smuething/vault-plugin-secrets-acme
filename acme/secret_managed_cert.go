@@ -351,20 +351,22 @@ func (b *backend) managedCertRenew(ctx context.Context, req *logical.Request, _ 
 		return nil, fmt.Errorf("certificate rollover")
 	}
 
-	state, maxTTL := role.CertificateState(cc)
+	state, ttl := role.CertificateState(cc)
 	if state != ACTIVE {
 		// we are in the rollover window, client must request a new certificate
 		return nil, fmt.Errorf("certificate rollover")
 	}
 
-	resp.Secret.TTL = min(
-		req.Secret.Increment,
-		maxTTL,
-	)
+	if req.Secret.TTL > 0 {
+		ttl = min(ttl, req.Secret.TTL)
+	}
 
 	if role.TTL > 0 {
-		resp.Secret.TTL = min(resp.Secret.TTL, role.TTL)
+		ttl = min(ttl, role.TTL)
 	}
+
+	resp.Secret.TTL = ttl
+	resp.Secret.Increment = ttl
 
 	return resp, nil
 }
