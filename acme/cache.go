@@ -34,6 +34,7 @@ type CachedCertificate struct {
 	RolloverAfter     time.Time `json:"rollover_after,omitempty"`
 	RevokeOnEviction  bool      `json:"revoke_on_eviction,omitempty"`
 	Rollover          bool      `json:"rollover,omitempty"`
+	Thumbprint        string    `json:"thumbprint"`
 }
 
 type CacheEntry struct {
@@ -74,6 +75,7 @@ func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *Ca
 				RolloverAfter:     role.RolloverAfter(certs[0]),
 				RevokeOnEviction:  role.RevokeOnExpiry,
 				Rollover:          false,
+				Thumbprint:        GetSHA256Thumbprint(certs[0]),
 			},
 		},
 	}

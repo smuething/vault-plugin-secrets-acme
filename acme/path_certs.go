@@ -49,9 +49,9 @@ func pathCerts(b *backend) []*framework.Path {
 					Default:     POLICY_REUSE,
 					Description: "The policy for handling certificates that are already cached by Vault.",
 				},
-				"certificate_grip": {
+				"thumbprint": {
 					Type:        framework.TypeString,
-					Description: "The internal grip used to identify the certificate that must be revoked / rolled over when the policy is not 'reuse'",
+					Description: "The SHA256 thumbprint of the certificate that must be revoked / rolled over when the policy is not 'reuse'",
 				},
 			},
 			ExistenceCheck: b.pathExistenceCheck,
@@ -109,7 +109,7 @@ func getCacheKey(r *role, data *framework.FieldData) (string, error) {
 	key := string(rolePath) + string(dataPath)
 	hashedKey := sha256.Sum256([]byte(key))
 
-	return fmt.Sprintf("%s%x", cachePrefix, hashedKey), nil
+	return fmt.Sprintf("%s%064x", cachePrefix, hashedKey), nil
 }
 
 func getNames(data *framework.FieldData) ([]string, error) {
