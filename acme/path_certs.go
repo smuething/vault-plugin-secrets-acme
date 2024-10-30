@@ -75,11 +75,14 @@ func (b *backend) certCreate(ctx context.Context, req *logical.Request, data *fr
 	}
 
 	roleName := data.Get("role").(string)
-	path := rolePrefix + roleName
-	r, err := getRole(ctx, req.Storage, path)
+	r, err := getRole(ctx, req.Storage, roleName)
 	if err != nil {
 		return nil, err
 	}
+	if r == nil {
+		return nil, fmt.Errorf("Role %s not found", roleName)
+	}
+
 	if err = validateNames(b, r, names); err != nil {
 		return logical.ErrorResponse(err.Error()), nil
 	}
