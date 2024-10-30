@@ -55,6 +55,8 @@ func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *Ca
 		panic("Invalid certificate")
 	}
 
+	thumbprint := GetSHA256Thumbprint(certs[0])
+
 	return &CacheEntry{
 		Leases:  1,
 		Account: role.Account,
@@ -62,7 +64,7 @@ func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *Ca
 		Domain:  cert.Domain,
 		Domains: certs[0].DNSNames,
 		Certificates: map[string]*CachedCertificate{
-			certs[0].SerialNumber.String(): {
+			thumbprint: {
 				Leases:            1,
 				Domain:            certs[0].Subject.CommonName,
 				CertURL:           cert.CertURL,
@@ -75,7 +77,7 @@ func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *Ca
 				NotAfter:          certs[0].NotAfter,
 				RevokeOnEviction:  role.RevokeOnExpiry,
 				Rollover:          false,
-				Thumbprint:        GetSHA256Thumbprint(certs[0]),
+				Thumbprint:        thumbprint,
 			},
 		},
 	}
