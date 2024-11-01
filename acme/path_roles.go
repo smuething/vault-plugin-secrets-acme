@@ -271,7 +271,7 @@ func (r *role) CertificateState(cert *CachedCertificate) (CertificateState, time
 	if cert.Rollover {
 		return ROLLING_OVER, 0
 	}
-	certTTL := float64(cert.NotAfter.Sub(cert.NotBefore))
+	certTTL := float64(cert.NotAfter.Sub(cert.NotBefore).Seconds())
 	rolloverTime := cert.NotAfter.Add(time.Duration(certTTL*float64(r.RolloverTimePercentage)/100.0) * time.Second)
 	rolloverWindowStart := rolloverTime.Add(-r.RolloverWindow)
 	if now.After(rolloverWindowStart) {
