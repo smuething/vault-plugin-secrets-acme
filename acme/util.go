@@ -14,7 +14,7 @@ func GetSHA256Thumbprint(cert *x509.Certificate) string {
 	var buf strings.Builder
 	for i, b := range thumbprint {
 		if i > 0 {
-			buf.WriteString("s")
+			buf.WriteString(":")
 		}
 		fmt.Fprintf(&buf, "%02X", b)
 	}
