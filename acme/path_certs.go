@@ -2,8 +2,6 @@ package acme
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -92,27 +90,6 @@ func (b *backend) certCreate(ctx context.Context, req *logical.Request, data *fr
 	} else {
 		return b.getUnmanagedCert(ctx, req, roleName, r, names)
 	}
-}
-
-func getCacheKey(r *role, data *framework.FieldData) (string, error) {
-	rolePath, err := json.Marshal(r)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshall role: %v", err)
-	}
-
-	d := make(map[string]interface{})
-	for key := range data.Schema {
-		d[key] = data.Get(key)
-	}
-	dataPath, err := json.Marshal(d)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshall data: %v", err)
-	}
-
-	key := string(rolePath) + string(dataPath)
-	hashedKey := sha256.Sum256([]byte(key))
-
-	return fmt.Sprintf("%s%064x", cachePrefix, hashedKey), nil
 }
 
 func getNames(data *framework.FieldData) ([]string, error) {

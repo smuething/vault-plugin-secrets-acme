@@ -2,12 +2,15 @@ package acme
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
+	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
@@ -148,4 +151,21 @@ func (c *Cache) Clear(ctx context.Context, storage logical.Storage) error {
 	}
 
 	return nil
+}
+
+func getCacheKey(data *framework.FieldData) (string, error) {
+
+	d := make(map[string]interface{})
+	for key := range data.Schema {
+		d[key] = data.Get(key)
+	}
+	dataPath, err := json.Marshal(d)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshall data: %v", err)
+	}
+
+	key := string(rolePath) + string(dataPath)
+	hashedKey := sha256.Sum256([]byte(key))
+
+	return fmt.Sprintf("%s%064x", cachePrefix, hashedKey), nil
 }
