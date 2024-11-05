@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
-	"strings"
 	"sync"
 	"time"
 
@@ -181,13 +180,9 @@ func (ce *CacheEntry) Save(ctx context.Context, storage logical.Storage, key str
 }
 
 func (c *Cache) List(ctx context.Context, storage logical.Storage) ([]string, error) {
-	storageList, err := storage.List(ctx, cachePrefix)
+	list, err := storage.List(ctx, cachePrefix)
 	if err != nil {
 		return nil, err
-	}
-	list := make([]string, len(storageList))
-	for i, path := range storageList {
-		list[i], _ = strings.CutPrefix(path, cachePrefix)
 	}
 	return list, nil
 }
@@ -249,5 +244,5 @@ func getCacheKey(rolePath string, data *framework.FieldData) (string, error) {
 	key := string(rolePath) + string(dataPath)
 	hashedKey := sha256.Sum256([]byte(key))
 
-	return fmt.Sprintf("%s%064x", cachePrefix, hashedKey), nil
+	return fmt.Sprintf("%064x", hashedKey), nil
 }
