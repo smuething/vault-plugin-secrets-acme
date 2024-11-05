@@ -1,8 +1,11 @@
 package acme
 
 import (
+	"crypto"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"strings"
 
@@ -30,4 +33,39 @@ func GetCertID(cert *x509.Certificate) string {
 		return GetSHA256Thumbprint(cert)
 	}
 	return ariCertID
+}
+
+func ConvertToMapStringAny(source any) map[string]any {
+	marshaled, err := json.Marshal(source)
+	if err != nil {
+		panic(err)
+	}
+	result := make(map[string]any)
+	if err = json.Unmarshal(marshaled, &result); err != nil {
+		panic(err)
+	}
+	return result
+}
+
+type PrivateKey struct {
+	crypto.PrivateKey
+}
+
+func (key *PrivateKey) MarshalText() ([]byte, error) {
+	if key == nil {
+		return []byte(""), nil
+	}
+	x509Encoded, err := x509.MarshalPKCS8PrivateKey(key.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+	pemEncoded := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: x509Encoded})
+	return pemEncoded, nil
+}
+
+func (key *PrivateKey) UnmarshalText(text []byte) error {
+	block, _ := pem.Decode(text)
+	privateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	key.PrivateKey = privateKey
+	return err
 }
