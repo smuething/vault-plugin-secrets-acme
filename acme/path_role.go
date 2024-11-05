@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
-	"github.com/mitchellh/mapstructure"
 )
 
 type CertificateState int
@@ -23,7 +22,7 @@ const (
 func pathRoles(b *backend) []*framework.Path {
 	return []*framework.Path{
 		{
-			Pattern: "roles/?$",
+			Pattern: rolePrefix + "?$",
 			Operations: map[logical.Operation]framework.OperationHandler{
 				logical.ListOperation: &framework.PathOperation{
 					Callback: b.roleList,
@@ -31,7 +30,7 @@ func pathRoles(b *backend) []*framework.Path {
 			},
 		},
 		{
-			Pattern: "roles/" + framework.GenericNameRegex("name"),
+			Pattern: rolePrefix + framework.GenericNameRegex("name"),
 			Fields: map[string]*framework.FieldSchema{
 				"name": {
 					Type:     framework.TypeLowerCaseString,
@@ -202,21 +201,12 @@ func (b *backend) roleRead(ctx context.Context, req *logical.Request, data *fram
 		return logical.ErrorResponse("This role does not exists"), nil
 	}
 
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"account":                  r.Account,
-			"allowed_domains":          r.AllowedDomains,
-			"allow_bare_domains":       r.AllowBareDomains,
-			"allow_subdomains":         r.AllowSubdomains,
-			"managed":                  r.Managed,
-			"rollover_time_percentage": r.RolloverTimePercentage,
-			"rollover_window":          r.RolloverWindow.Seconds(),
-			"key_type":                 r.KeyType,
-			"revoke_on_expiry":         r.RevokeOnExpiry,
-			"max_ttl":                  r.MaxTTL.Seconds(),
-			"ttl":                      r.TTL.Seconds(),
-		},
-	}, nil
+	d := ConvertToMapStringAny(r)
+	// fix the TTLs, they get displayed horribly otherwise
+	d["max_ttl"] = r.MaxTTL.String()
+	d["ttl"] = r.TTL.String()
+
+	return &logical.Response{Data: d}, nil
 }
 
 func (b *backend) roleDelete(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
@@ -306,14 +296,8 @@ func getRole(ctx context.Context, storage logical.Storage, name string) (*role, 
 		return nil, nil
 	}
 
-	var d map[string]interface{}
-	err = storageEntry.DecodeJSON(&d)
-	if err != nil {
-		return nil, err
-	}
-
 	var r *role
-	err = mapstructure.Decode(d, &r)
+	err = storageEntry.DecodeJSON(&r)
 	if err != nil {
 		return nil, err
 	}
@@ -327,13 +311,8 @@ func getRole(ctx context.Context, storage logical.Storage, name string) (*role, 
 }
 
 func (r *role) save(ctx context.Context, storage logical.Storage, name string) error {
-	var data map[string]interface{}
-	err := mapstructure.Decode(r, &data)
-	if err != nil {
-		return err
-	}
 
-	storageEntry, err := logical.StorageEntryJSON(rolePrefix+name, data)
+	storageEntry, err := logical.StorageEntryJSON(rolePrefix+name, r)
 	if err != nil {
 		return err
 	}

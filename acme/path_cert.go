@@ -20,21 +20,17 @@ const (
 func pathCerts(b *backend) []*framework.Path {
 	return []*framework.Path{
 		{
-			Pattern: "certs/" + framework.GenericNameRegex("role"),
+			Pattern: certPrefix + framework.GenericNameRegex("role") + "/" + "(?P<domains>((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9],)*(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9])",
 			Fields: map[string]*framework.FieldSchema{
 				"role": {
 					Type:        framework.TypeString,
 					Required:    true,
 					Description: "The role to be used for issuing the certificate",
 				},
-				"common_name": {
-					Type:        framework.TypeString,
-					Required:    true,
-					Description: "The common name of the certificate. Use this for the primary domain name",
-				},
-				"alternative_names": {
+				"domains": {
 					Type:        framework.TypeCommaStringSlice,
-					Description: "A list of additional DNS names that will be put into the SAN field of the certificate",
+					Required:    true,
+					Description: "The domains for which the certificate will be valid. The first certificate in the list will be set as the common name.",
 				},
 				"policy": {
 					Type: framework.TypeString,
@@ -93,17 +89,16 @@ func (b *backend) certCreate(ctx context.Context, req *logical.Request, data *fr
 }
 
 func getNames(data *framework.FieldData) ([]string, error) {
-	commonName := data.Get("common_name").(string)
-	altNames := data.Get("alternative_names").([]string)
-	slices.Sort(altNames)
-	if slices.Contains(altNames, commonName) {
-		return nil, fmt.Errorf("main domain cannot be specified again in alternative_names")
+	domains := data.Get("domains").([]string)
+	if len(domains) < 1 {
+		return nil, fmt.Errorf("No domains specified for the certificate")
 	}
-	names := make([]string, len(altNames)+1)
-	names[0] = commonName
-	copy(names[1:], altNames)
+	if len(domains) > 1 {
+		// canonicalize domains that do not control the CN of the certificate
+		slices.Sort(domains[1:])
+	}
 
-	return names, nil
+	return domains, nil
 }
 
 func validateNames(b logical.Backend, r *role, names []string) error {

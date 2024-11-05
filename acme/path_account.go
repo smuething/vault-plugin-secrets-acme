@@ -21,7 +21,7 @@ var keyTypes = []interface{}{
 func pathAccounts(b *backend) []*framework.Path {
 	return []*framework.Path{
 		{
-			Pattern: "accounts/?$",
+			Pattern: accountPrefix + "?$",
 			Operations: map[logical.Operation]framework.OperationHandler{
 				logical.ListOperation: &framework.PathOperation{
 					Callback: b.accountList,
@@ -29,7 +29,7 @@ func pathAccounts(b *backend) []*framework.Path {
 			},
 		},
 		{
-			Pattern: "accounts/" + framework.GenericNameRegex("name"),
+			Pattern: accountPrefix + framework.GenericNameRegex("name"),
 			Fields: map[string]*framework.FieldSchema{
 				"name": {
 					Type:        framework.TypeString,
@@ -163,7 +163,7 @@ func (b *backend) accountWrite(ctx context.Context, req *logical.Request, data *
 		user = &account{
 			ServerURL: serverURL,
 			KeyType:   data.Get("key_type").(string),
-			Key:       privateKey,
+			Key:       PrivateKey{PrivateKey: privateKey},
 		}
 	} else {
 		update = true
@@ -225,22 +225,7 @@ func (b *backend) accountRead(ctx context.Context, req *logical.Request, data *f
 		return logical.ErrorResponse("This account does not exists"), nil
 	}
 
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"server_url":              a.ServerURL,
-			"registration_uri":        a.Registration.URI,
-			"contact":                 a.GetEmail(),
-			"terms_of_service_agreed": a.TermsOfServiceAgreed,
-			"key_type":                a.KeyType,
-			"provider":                a.Provider,
-			"provider_configuration":  a.ProviderConfiguration,
-			"enable_http_01":          a.EnableHTTP01,
-			"enable_tls_alpn_01":      a.EnableTLSALPN01,
-			"dns_resolvers":           a.DNSResolvers,
-			"ignore_dns_propagation":  a.IgnoreDNSPropagation,
-			"use_ari":                 a.UseARI,
-		},
-	}, nil
+	return &logical.Response{Data: ConvertToMapStringAny(a)}, nil
 }
 
 func (b *backend) accountDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -255,7 +240,7 @@ func (b *backend) accountDelete(ctx context.Context, req *logical.Request, data 
 
 	client, err := a.getClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to instanciate new client: %w", err)
+		return nil, fmt.Errorf("failed to instantiate new client: %w", err)
 	}
 
 	if err = client.Registration.DeleteRegistration(); err != nil {
@@ -268,7 +253,7 @@ func (b *backend) accountDelete(ctx context.Context, req *logical.Request, data 
 }
 
 func (b *backend) accountList(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	entries, err := req.Storage.List(ctx, "accounts/")
+	entries, err := req.Storage.List(ctx, accountPrefix)
 	if err != nil {
 		return nil, err
 	}

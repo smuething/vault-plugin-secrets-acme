@@ -9,8 +9,9 @@ import (
 )
 
 const cachePrefix = "cache/"
-const rolePrefix = "roles/"
-const accountPrefix = "accounts/"
+const rolePrefix = "role/"
+const accountPrefix = "account/"
+const certPrefix = "cert/"
 const secretManagedCertType = "managed-cert"
 
 type backend struct {
