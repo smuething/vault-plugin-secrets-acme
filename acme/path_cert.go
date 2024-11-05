@@ -17,7 +17,7 @@ const (
 	POLICY_ROLLOVER_REVOKE = "rollover_revoke"
 )
 
-func pathCerts(b *backend) []*framework.Path {
+func pathCert(b *backend) []*framework.Path {
 	return []*framework.Path{
 		{
 			Pattern: certPrefix + framework.GenericNameRegex("role") + "/" + "(?P<domains>((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9],)*(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9])",

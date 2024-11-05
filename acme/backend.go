@@ -32,9 +32,9 @@ func Factory(version string) logical.Factory {
 				secretManagedCert(&b),
 			},
 			Paths: framework.PathAppend(
-				pathAccounts(&b),
-				pathRoles(&b),
-				pathCerts(&b),
+				pathAccount(&b),
+				pathRole(&b),
+				pathCert(&b),
 				pathChallenges(&b),
 				pathCache(&b),
 			),

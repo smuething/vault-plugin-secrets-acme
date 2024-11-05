@@ -19,7 +19,7 @@ const (
 	EXPIRED
 )
 
-func pathRoles(b *backend) []*framework.Path {
+func pathRole(b *backend) []*framework.Path {
 	return []*framework.Path{
 		{
 			Pattern: rolePrefix + "?$",

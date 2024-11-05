@@ -18,7 +18,7 @@ var keyTypes = []interface{}{
 	"RSA8192",
 }
 
-func pathAccounts(b *backend) []*framework.Path {
+func pathAccount(b *backend) []*framework.Path {
 	return []*framework.Path{
 		{
 			Pattern: accountPrefix + "?$",
