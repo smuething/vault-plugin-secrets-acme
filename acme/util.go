@@ -5,6 +5,8 @@ import (
 	"crypto/x509"
 	"fmt"
 	"strings"
+
+	"github.com/go-acme/lego/v4/certificate"
 )
 
 func GetSHA256Thumbprint(cert *x509.Certificate) string {
@@ -19,4 +21,13 @@ func GetSHA256Thumbprint(cert *x509.Certificate) string {
 		fmt.Fprintf(&buf, "%02X", b)
 	}
 	return buf.String()
+}
+
+func GetCertID(cert *x509.Certificate) string {
+	ariCertID, err := certificate.MakeARICertID(cert)
+	if err != nil {
+		// there is probably no ARI extension on the certificate, fall back to thumbprint
+		return GetSHA256Thumbprint(cert)
+	}
+	return ariCertID
 }
