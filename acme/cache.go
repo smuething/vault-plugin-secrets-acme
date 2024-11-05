@@ -28,19 +28,23 @@ func NewCache() *Cache {
 }
 
 type CachedCertificate struct {
-	Leases            int       `json:"leases"`
-	Domain            string    `json:"domain"`
-	CertURL           string    `json:"cert_url,omitempty"`
-	CertStableURL     string    `json:"cert_stable_url,omitempty"`
-	PrivateKey        []byte    `json:"private_key,omitempty"`
-	Cert              []byte    `json:"cert,omitempty"`
-	IssuerCertificate []byte    `json:"issuer_certificate,omitempty"`
-	CSR               []byte    `json:"csr,omitempty"`
-	NotBefore         time.Time `json:"not_before,omitempty"`
-	NotAfter          time.Time `json:"not_after,omitempty"`
-	RevokeOnEviction  bool      `json:"revoke_on_eviction,omitempty"`
-	Rollover          bool      `json:"rollover,omitempty"`
-	Thumbprint        string    `json:"thumbprint"`
+	Leases            int         `json:"leases"`
+	Domain            string      `json:"domain"`
+	CertURL           string      `json:"cert_url,omitempty"`
+	CertStableURL     string      `json:"cert_stable_url,omitempty"`
+	PrivateKey        []byte      `json:"private_key,omitempty"`
+	Cert              []byte      `json:"cert,omitempty"`
+	IssuerCertificate []byte      `json:"issuer_certificate,omitempty"`
+	CSR               []byte      `json:"csr,omitempty"`
+	NotBefore         time.Time   `json:"not_before,omitempty"`
+	NotAfter          time.Time   `json:"not_after,omitempty"`
+	RevokeOnEviction  bool        `json:"revoke_on_eviction,omitempty"`
+	Rollover          bool        `json:"rollover,omitempty"`
+	CertID            string      `json:"cert_id"`
+	ARINextCheck      time.Time   `json:"ari_next_check,omitempty"`
+	ARIRenewalWindow  acme.Window `json:"ari_renewal_window,omitempty"`
+	ARIRenewalTime    time.Time   `json:"ari_renewal_time,omitempty"`
+	ARIExplanationURL string      `json:"ari_explanation_url,omitempty"`
 }
 
 type CacheEntry struct {
@@ -54,6 +58,73 @@ type CacheEntry struct {
 	Certificates map[string]*CachedCertificate `json:"certificates"`
 }
 
+func (cc *CachedCertificate) UpdateARIInformation(role *role) error {
+	if !role.GetAccount().UseARI {
+		return fmt.Errorf("Acount does not use ARI")
+	}
+
+	now := time.Now()
+
+	if cc.ARINextCheck.After(now.Add(role.TTL)) {
+		// no need to renew ARI information
+		return nil
+	}
+
+	certs, err := certcrypto.ParsePEMBundle(cc.Cert)
+	if err != nil {
+		panic("Invalid certificate")
+	}
+
+	client, err := role.GetAccount().getClient()
+	if err != nil {
+		return err
+	}
+
+	renewalInfo, err := client.Certificate.GetRenewalInfo(certificate.RenewalInfoRequest{Cert: certs[0]})
+	if err != nil {
+		return err
+	}
+
+	cc.ARIRenewalWindow = renewalInfo.SuggestedWindow
+	cc.ARINextCheck = now.Add(renewalInfo.RetryAfter)
+	cc.ARIExplanationURL = renewalInfo.ExplanationURL
+
+	// The following algorithm is copied from lego/renewal and modified to handle the "renew immediately case"
+
+	// Explicitly convert all times to UTC.
+	now = now.UTC()
+	start := renewalInfo.SuggestedWindow.Start.UTC()
+	end := renewalInfo.SuggestedWindow.End.UTC()
+
+	// Select a uniform random time within the suggested window.
+	rt := start
+	if window := end.Sub(start); window > 0 {
+		randomDuration := time.Duration(rand.Int64N(int64(window)))
+		rt = rt.Add(randomDuration)
+	}
+
+	// If the selected time is in the past, attempt renewal immediately.
+	if rt.Before(now) {
+		cc.ARIRenewalTime = now
+	}
+
+	// Otherwise, if the client can schedule itself to attempt renewal at exactly the selected time, do so.
+	willingToSleepUntil := now.Add(role.TTL)
+	if willingToSleepUntil.After(rt) || willingToSleepUntil.Equal(rt) {
+		cc.ARIRenewalTime = rt
+	}
+
+	// Otherwise, if the selected time is before the next time that the client would wake up normally, attempt renewal immediately.
+	if rt.Before(now.Add(role.TTL)) {
+		cc.ARIRenewalTime = now
+	}
+
+	// Otherwise, sleep until the next normal wake time, re-check ARI, and return to Step 1.
+	cc.ARIRenewalTime = rt
+
+	return nil
+}
+
 func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *CacheEntry {
 
 	certs, err := certcrypto.ParsePEMBundle(cert.Certificate)
@@ -61,7 +132,7 @@ func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *Ca
 		panic("Invalid certificate")
 	}
 
-	thumbprint := GetSHA256Thumbprint(certs[0])
+	certID := GetCertID(certs[0])
 
 	return &CacheEntry{
 		Leases:  1,
@@ -70,7 +141,7 @@ func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *Ca
 		Domain:  cert.Domain,
 		Domains: certs[0].DNSNames,
 		Certificates: map[string]*CachedCertificate{
-			thumbprint: {
+			certID: {
 				Leases:            1,
 				Domain:            certs[0].Subject.CommonName,
 				CertURL:           cert.CertURL,
@@ -83,7 +154,7 @@ func NewCacheEntry(role_name string, role *role, cert *certificate.Resource) *Ca
 				NotAfter:          certs[0].NotAfter,
 				RevokeOnEviction:  role.RevokeOnExpiry,
 				Rollover:          false,
-				Thumbprint:        thumbprint,
+				CertID:            certID,
 			},
 		},
 	}

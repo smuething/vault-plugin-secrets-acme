@@ -2,6 +2,7 @@ package acme
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"time"
 
@@ -269,21 +270,30 @@ func (r *role) GetAccount() *account {
 }
 
 func (r *role) CertificateState(cert *CachedCertificate) (CertificateState, time.Duration) {
-	now := time.Now()
-	if now.After(cert.NotAfter) {
-		return EXPIRED, 0
-	}
 	if cert.Rollover {
 		return ROLLING_OVER, 0
 	}
-	certTTL := float64(cert.NotAfter.Sub(cert.NotBefore).Seconds())
-	rolloverTime := cert.NotAfter.Add(time.Duration(certTTL*float64(r.RolloverTimePercentage)/100.0) * time.Second)
-	rolloverWindowStart := rolloverTime.Add(-r.RolloverWindow)
-	if now.After(rolloverWindowStart) {
-		return START_ROLL_OVER, 0
+	now := time.Now()
+	if r.GetAccount().UseARI {
+		// ARI should aready be updated by this point
+		if !cert.ARIRenewalTime.After(now) {
+			return START_ROLL_OVER, 0
+		}
+		maxTTL := cert.ARIRenewalTime.Sub(now)
+		return ACTIVE, maxTTL
+	} else {
+		if now.After(cert.NotAfter) {
+			return EXPIRED, 0
+		}
+		certTTL := float64(cert.NotAfter.Sub(cert.NotBefore).Seconds())
+		rolloverTime := cert.NotAfter.Add(time.Duration(certTTL*float64(r.RolloverTimePercentage)/100.0) * time.Second)
+		rolloverWindowStart := rolloverTime.Add(-r.RolloverWindow)
+		if now.After(rolloverWindowStart) {
+			return START_ROLL_OVER, 0
+		}
+		maxTTL := rolloverWindowStart.Add(rand.N(r.RolloverWindow)).Sub(now)
+		return ACTIVE, maxTTL
 	}
-	maxTTL := rolloverWindowStart.Add(rand.N(r.RolloverWindow)).Sub(now)
-	return ACTIVE, maxTTL
 }
 
 func getRole(ctx context.Context, storage logical.Storage, name string) (*role, error) {

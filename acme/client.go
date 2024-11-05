@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func getCertFromACMEProvider(ctx context.Context, logger log.Logger, req *logical.Request, r *role, names []string) (*certificate.Resource, error) {
+func getCertFromACMEProvider(ctx context.Context, logger log.Logger, req *logical.Request, r *role, names []string, replacesCertID string) (*certificate.Resource, error) {
 
 	a, err := getAccount(ctx, req.Storage, r.Account)
 	if err != nil {
@@ -46,6 +46,10 @@ func getCertFromACMEProvider(ctx context.Context, logger log.Logger, req *logica
 			return nil, err
 		}
 		request.PrivateKey = privateKey
+	}
+
+	if r.GetAccount().UseARI && replacesCertID != "" {
+		request.ReplacesCertID = replacesCertID
 	}
 
 	return client.Certificate.Obtain(request)

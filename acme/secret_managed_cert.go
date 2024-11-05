@@ -42,7 +42,7 @@ func secretManagedCert(b *backend) *framework.Secret {
 			"role": {
 				Type: framework.TypeString,
 			},
-			"thumbprint": {
+			"cert_id": {
 				Type: framework.TypeString,
 			},
 		},
@@ -51,25 +51,28 @@ func secretManagedCert(b *backend) *framework.Secret {
 	}
 }
 
-func (r *role) getActiveCertificateThumbprint(b *backend, ce *CacheEntry) (string, string) {
-	var active_thumbprint = ""
-	var rollover_thumbprint = ""
+func (r *role) getActiveCertID(b *backend, ce *CacheEntry, role *role) (string, string) {
+	var active_cert_id = ""
+	var rollover_cert_id = ""
 	// try to find active certificate
-	for thumbprint, cc := range ce.Certificates {
-		b.Logger().Debug("Looking at certificate", "thumbprint", thumbprint)
+	for cert_id, cc := range ce.Certificates {
+		b.Logger().Debug("Looking at certificate", "cert_id", cert_id)
+		if role.GetAccount().UseARI {
+			_ = cc.UpdateARIInformation(role)
+		}
 		state, _ := r.CertificateState(cc)
 		switch state {
 		case ACTIVE:
-			if active_thumbprint != "" {
+			if active_cert_id != "" {
 				panic("There must never be more than one active certificate for each cache key")
 			}
-			active_thumbprint = thumbprint
+			active_cert_id = cert_id
 		case START_ROLL_OVER:
 			cc.Rollover = true
-			rollover_thumbprint = thumbprint
+			rollover_cert_id = cert_id
 		}
 	}
-	return active_thumbprint, rollover_thumbprint
+	return active_cert_id, rollover_cert_id
 }
 
 func (b *backend) buildManagedCertSecret(_ *logical.Request, roleName string, role *role, cacheKey string, cc *CachedCertificate) (*logical.Response, error) {
@@ -90,22 +93,49 @@ func (b *backend) buildManagedCertSecret(_ *logical.Request, roleName string, ro
 			"issuer_cert": string(cc.IssuerCertificate),
 			"not_before":  cc.NotBefore.String(),
 			"not_after":   cc.NotAfter.String(),
-			"thumbprint":  cc.Thumbprint,
+			"cert_id":     cc.CertID,
 		},
 		// this will be used when revoking the certificate
 		map[string]interface{}{
-			"cache_key":  cacheKey,
-			"thumbprint": cc.Thumbprint,
+			"cache_key": cacheKey,
+			"cert_id":   cc.CertID,
 		})
 
-	s.Secret.MaxTTL = role.MaxTTL
+	if role.GetAccount().UseARI {
 
-	if role.TTL > 0 {
-		s.Secret.TTL = min(role.TTL, maxTTL)
+		now := time.Now()
+
+		certTTL := cc.ARIRenewalTime.Sub(now)
+
+		if certTTL <= 0 {
+			return nil, fmt.Errorf("Cannot build secret for certificate that needs renewal according to ARI info")
+		}
+
+		s.Secret.MaxTTL = certTTL
+		s.Secret.TTL = certTTL
+
+		if role.MaxTTL > 0 {
+			s.Secret.MaxTTL = min(s.Secret.MaxTTL, role.MaxTTL)
+		}
+
+		if role.TTL > 0 {
+			s.Secret.TTL = min(s.Secret.TTL, role.TTL)
+		}
+
+		timeToNextCheck := cc.ARINextCheck.Sub(now)
+		if timeToNextCheck > 0 {
+			s.Secret.TTL = min(s.Secret.TTL, timeToNextCheck)
+		}
+
 	} else {
-		s.Secret.TTL = maxTTL
+		s.Secret.MaxTTL = role.MaxTTL
+
+		if role.TTL > 0 {
+			s.Secret.TTL = min(role.TTL, maxTTL)
+		} else {
+			s.Secret.TTL = maxTTL
+		}
 	}
-	s.Secret.Increment = s.Secret.TTL
 
 	b.Logger().Debug("secret prepared", "TTL", s.Secret.TTL, "MaxTTL", s.Secret.MaxTTL)
 
@@ -116,21 +146,21 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 
 	policy := data.Get("policy").(string)
 
-	var thumbprint = ""
+	var certID = ""
 	if policy != POLICY_REUSE {
-		t, ok := data.GetOk("thumbprint")
+		id, ok := data.GetOk("cert_id")
 		if !ok {
-			return nil, fmt.Errorf("thumbprint of existing certificate is required for policy '%s'", policy)
+			return nil, fmt.Errorf("Certificate ID of existing certificate is required for policy '%s'", policy)
 		}
-		thumbprint = t.(string)
+		certID = id.(string)
 	}
 
-	cacheKey, err := getCacheKey(role, data)
+	cacheKey, err := getCacheKey(roleName, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cache key: %w", err)
 	}
 
-	b.Logger().Debug("Got cachekey", "cacheKey", cacheKey)
+	b.Logger().Debug("Got cacheKey", "cacheKey", cacheKey)
 
 	b.cache.Lock()
 	defer b.cache.Unlock()
@@ -142,14 +172,14 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 
 	var cert *certificate.Resource = nil
 
-	var active_thumbprint = ""
+	var activeCertID = ""
 
 	if ce == nil {
 
 		b.Logger().Debug("No cache entry, creating one")
 
 		// certificate is not cached, we have to request a new one
-		cert, err = getCertFromACMEProvider(ctx, b.Logger(), req, role, names)
+		cert, err = getCertFromACMEProvider(ctx, b.Logger(), req, role, names, "")
 		if err != nil {
 			return nil, err
 		}
@@ -159,9 +189,14 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 		b.Logger().Debug("cache entry created", "num_certs", len(ce.Certificates), "ce", ce)
 
 		// get the active thumbprint (there is only one)
-		for t := range ce.Certificates {
-			b.Logger().Debug("thumbprint", "t", t)
-			active_thumbprint = t
+		for id, cc := range ce.Certificates {
+			b.Logger().Debug("certID", "certID", id)
+			activeCertID = id
+			if role.GetAccount().UseARI {
+				if err = cc.UpdateARIInformation(role); err != nil {
+					return nil, err
+				}
+			}
 		}
 	} else {
 
@@ -169,33 +204,29 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 
 		switch policy {
 		case POLICY_REUSE:
-			active_thumbprint, thumbprint = role.getActiveCertificateThumbprint(b, ce)
+			activeCertID, certID = role.getActiveCertID(b, ce, role)
 		case POLICY_ROLLOVER:
 			// set the old certificate to roll over (if we still have it)
-			cc := ce.Certificates[thumbprint]
+			cc := ce.Certificates[certID]
 			if cc != nil {
 				cc.Rollover = true
 			}
-			active_thumbprint, _ = role.getActiveCertificateThumbprint(b, ce)
-			b.Logger().Debug("Search for active_thumbprint complete", "active_thumbprint", active_thumbprint)
+			activeCertID, _ = role.getActiveCertID(b, ce, role)
+			b.Logger().Debug("Search for activeCertID complete", "activeCertID", activeCertID)
 		case POLICY_ROLLOVER_REVOKE:
 			// set the old certificate to roll over (if we still have it) and also enable
 			// revocaction on expiry
-			cc := ce.Certificates[thumbprint]
+			cc := ce.Certificates[activeCertID]
 			if cc != nil {
 				cc.Rollover = true
 				cc.RevokeOnEviction = true
 			}
-			active_thumbprint, _ = role.getActiveCertificateThumbprint(b, ce)
-			b.Logger().Debug("Search for active_thumbprint complete", "active_thumbprint", active_thumbprint)
+			activeCertID, _ = role.getActiveCertID(b, ce, role)
+			b.Logger().Debug("Search for activeCertID complete", "activeCertID", activeCertID)
 		case POLICY_REVOKE:
-			cc := ce.Certificates[thumbprint]
+			cc := ce.Certificates[certID]
 			if cc != nil {
-				a, err := getAccount(ctx, req.Storage, accountPrefix+role.Account)
-				if err != nil {
-					return nil, err
-				}
-				client, err := a.getClient()
+				client, err := role.GetAccount().getClient()
 				if err != nil {
 					return nil, err
 				}
@@ -205,10 +236,14 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 					if err := client.Certificate.Revoke(cc.Cert); err != nil {
 						return nil, err
 					}
-					active_thumbprint, _ = role.getActiveCertificateThumbprint(b, ce)
+					activeCertID, _ = role.getActiveCertID(b, ce, role)
 				} else {
 					// first, get a new certificate
-					cert, err := client.Certificate.RenewWithOptions(*cc.Certificate(), &certificate.RenewOptions{Bundle: true})
+					oldCertID := ""
+					if role.GetAccount().UseARI {
+						oldCertID = certID
+					}
+					cert, err := getCertFromACMEProvider(ctx, b.Logger(), req, role, names, oldCertID)
 					if err != nil {
 						return nil, err
 					}
@@ -219,7 +254,7 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 					}
 
 					// ... remove from cache ...
-					delete(ce.Certificates, thumbprint)
+					delete(ce.Certificates, certID)
 
 					// and save the changes *before* adding the new certificate to the store
 					// otherwise, an error later on would create orphaned cache entries
@@ -232,9 +267,9 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 						return nil, err
 					}
 
-					active_thumbprint = GetSHA256Thumbprint(certs[0])
+					activeCertID = GetCertID(certs[0])
 
-					ce.Certificates[active_thumbprint] = &CachedCertificate{
+					ce.Certificates[activeCertID] = &CachedCertificate{
 						Leases:            0,
 						Domain:            certs[0].Subject.CommonName,
 						CertURL:           cert.CertURL,
@@ -247,41 +282,33 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 						NotAfter:          certs[0].NotAfter,
 						RevokeOnEviction:  role.RevokeOnExpiry,
 						Rollover:          false,
+						CertID:            activeCertID,
+					}
+
+					if role.GetAccount().UseARI {
+						if err = ce.Certificates[activeCertID].UpdateARIInformation(role); err != nil {
+							return nil, err
+						}
 					}
 
 				}
 			}
 		}
 
-		if active_thumbprint == "" {
+		if activeCertID == "" {
 			// we have no certificate, we either need to get a new one or renew an existing certificate
-			if cc, ok := ce.Certificates[thumbprint]; ok {
-				a, err := getAccount(ctx, req.Storage, accountPrefix+role.Account)
-				if err != nil {
-					return nil, err
-				}
-				client, err := a.getClient()
-				if err != nil {
-					return nil, err
-				}
-				cert, err = client.Certificate.RenewWithOptions(*cc.Certificate(), &certificate.RenewOptions{Bundle: true})
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				cert, err = getCertFromACMEProvider(ctx, b.Logger(), req, role, names)
-				if err != nil {
-					return nil, err
-				}
+			cert, err = getCertFromACMEProvider(ctx, b.Logger(), req, role, names, certID)
+			if err != nil {
+				return nil, err
 			}
 
 			certs, err := certcrypto.ParsePEMBundle(cert.Certificate)
 			if err != nil {
 				return nil, err
 			}
-			active_thumbprint = GetSHA256Thumbprint(certs[0])
+			activeCertID = GetCertID(certs[0])
 
-			ce.Certificates[active_thumbprint] = &CachedCertificate{
+			ce.Certificates[activeCertID] = &CachedCertificate{
 				Leases:            0,
 				Domain:            certs[0].Subject.CommonName,
 				CertURL:           cert.CertURL,
@@ -294,20 +321,20 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 				NotAfter:          certs[0].NotAfter,
 				RevokeOnEviction:  role.RevokeOnExpiry,
 				Rollover:          false,
-				Thumbprint:        GetSHA256Thumbprint(certs[0]),
+				CertID:            activeCertID,
 			}
 
 		}
 
 		// increase lease counts
-		ce.Certificates[active_thumbprint].Leases++
+		ce.Certificates[activeCertID].Leases++
 		ce.Leases++
 
 	}
 
-	b.Logger().Debug("Preparing secret", "active_thumbprint", active_thumbprint, "thumbprint", thumbprint)
+	b.Logger().Debug("Preparing secret", "activeCertID", activeCertID, "certID", certID)
 
-	secretResponse, err := b.buildManagedCertSecret(req, roleName, role, cacheKey, ce.Certificates[active_thumbprint])
+	secretResponse, err := b.buildManagedCertSecret(req, roleName, role, cacheKey, ce.Certificates[activeCertID])
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +353,7 @@ func (b *backend) managedCertRenew(ctx context.Context, req *logical.Request, _ 
 	resp := &logical.Response{Secret: req.Secret}
 
 	cacheKey := req.Secret.InternalData["cache_key"].(string)
-	thumbprint := req.Secret.InternalData["thumbprint"].(string)
+	certID := req.Secret.InternalData["cert_id"].(string)
 
 	ce, err := b.cache.Read(ctx, req.Storage, cacheKey)
 	if err != nil {
@@ -341,13 +368,13 @@ func (b *backend) managedCertRenew(ctx context.Context, req *logical.Request, _ 
 		return nil, err
 	}
 
-	cc, ok := ce.Certificates[thumbprint]
+	cc, ok := ce.Certificates[certID]
 	if !ok {
 		return nil, fmt.Errorf("certificate not found")
 	}
 
 	if cc.Rollover {
-		// someone manually initiated a certificate rollover
+		// certificate rollover already started
 		return nil, fmt.Errorf("certificate rollover")
 	}
 
@@ -366,16 +393,15 @@ func (b *backend) managedCertRenew(ctx context.Context, req *logical.Request, _ 
 	}
 
 	resp.Secret.TTL = ttl
-	resp.Secret.Increment = ttl
 
 	return resp, nil
 }
 
-func (ce *CacheEntry) revokeCachedCertificate(ctx context.Context, req *logical.Request, thumbprint string) error {
+func (ce *CacheEntry) revokeCachedCertificate(ctx context.Context, req *logical.Request, certID string) error {
 
-	cc, ok := ce.Certificates[thumbprint]
+	cc, ok := ce.Certificates[certID]
 	if !ok {
-		return fmt.Errorf("thumbprint not found in cache entry")
+		return fmt.Errorf("certificate ID not found in cache entry")
 	}
 
 	if cc.NotAfter.Add(5 * time.Minute).After(time.Now()) {
@@ -388,7 +414,7 @@ func (ce *CacheEntry) revokeCachedCertificate(ctx context.Context, req *logical.
 		return err
 	}
 
-	a, err := getAccount(ctx, req.Storage, accountPrefix+r.Account)
+	a, err := getAccount(ctx, req.Storage, r.Account)
 	if err != nil {
 		return err
 	}
@@ -405,7 +431,7 @@ func (b *backend) managedCertRevoke(ctx context.Context, req *logical.Request, _
 	b.cache.Lock()
 	defer b.cache.Unlock()
 	cacheKey := req.Secret.InternalData["cache_key"].(string)
-	thumbprint := req.Secret.InternalData["thumbprint"].(string)
+	certID := req.Secret.InternalData["cert_id"].(string)
 
 	ce, err := b.cache.Read(ctx, req.Storage, cacheKey)
 	if err != nil {
@@ -419,7 +445,7 @@ func (b *backend) managedCertRevoke(ctx context.Context, req *logical.Request, _
 	var cacheError error
 
 	// first, handle the certificate
-	cc, ok := ce.Certificates[thumbprint]
+	cc, ok := ce.Certificates[certID]
 	if !ok {
 		// revocationError = fmt.Errorf("Certificate not found in cache")
 	} else {
@@ -428,10 +454,10 @@ func (b *backend) managedCertRevoke(ctx context.Context, req *logical.Request, _
 		if cc.Leases == 0 {
 			// revoke certificate if requested
 			if cc.RevokeOnEviction {
-				revocationError = ce.revokeCachedCertificate(ctx, req, thumbprint)
+				revocationError = ce.revokeCachedCertificate(ctx, req, certID)
 			}
 			// remove cache entry
-			delete(ce.Certificates, thumbprint)
+			delete(ce.Certificates, certID)
 		}
 	}
 

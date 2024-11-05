@@ -47,9 +47,9 @@ func pathCerts(b *backend) []*framework.Path {
 					Default:     POLICY_REUSE,
 					Description: "The policy for handling certificates that are already cached by Vault.",
 				},
-				"thumbprint": {
+				"cert_id": {
 					Type:        framework.TypeString,
-					Description: "The SHA256 thumbprint of the certificate that must be revoked / rolled over when the policy is not 'reuse'",
+					Description: "The ARI certificate ID, or if the ACME CA does not support ARI, the SHA256 thumbprint of the certificate that must be revoked / rolled over when the policy is not 'reuse'",
 				},
 			},
 			ExistenceCheck: b.pathExistenceCheck,

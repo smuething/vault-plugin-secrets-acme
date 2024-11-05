@@ -10,7 +10,8 @@ import (
 
 func (b *backend) getUnmanagedCert(ctx context.Context, req *logical.Request, roleName string, role *role, names []string) (*logical.Response, error) {
 
-	cert, err := getCertFromACMEProvider(ctx, b.Logger(), req, role, names)
+	// No ARI support here
+	cert, err := getCertFromACMEProvider(ctx, b.Logger(), req, role, names, "")
 	if err != nil {
 		return logical.ErrorResponse("Failed to validate certificate signing request: %s", err), err
 	}
