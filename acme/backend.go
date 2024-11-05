@@ -12,7 +12,6 @@ const cachePrefix = "cache/"
 const rolePrefix = "roles/"
 const accountPrefix = "accounts/"
 const secretManagedCertType = "managed-cert"
-const secretUnmanagedCertType = "unmanaged-cert"
 
 type backend struct {
 	*framework.Backend
