@@ -155,7 +155,7 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 		certID = id.(string)
 	}
 
-	cacheKey, err := getCacheKey(roleName, data)
+	cacheKey, err := getCacheKey(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cache key: %w", err)
 	}

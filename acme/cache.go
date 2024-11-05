@@ -230,18 +230,20 @@ func (c *Cache) Clear(ctx context.Context, storage logical.Storage) error {
 	return nil
 }
 
-func getCacheKey(rolePath string, data *framework.FieldData) (string, error) {
+func getCacheKey(data *framework.FieldData) (string, error) {
 
-	d := make(map[string]interface{})
-	for key := range data.Schema {
-		d[key] = data.Get(key)
+	// only these two fields are actually relevant for discerning different cache entries
+	domains, err := getNames(data)
+	if err != nil {
+		return "", err
 	}
-	dataPath, err := json.Marshal(d)
+
+	domainListString, err := json.Marshal(domains)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshall data: %v", err)
 	}
 
-	key := string(rolePath) + string(dataPath)
+	key := data.Get("role").(string) + string(domainListString)
 	hashedKey := sha256.Sum256([]byte(key))
 
 	return fmt.Sprintf("%064x", hashedKey), nil
