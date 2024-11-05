@@ -85,6 +85,11 @@ func pathAccounts(b *backend) []*framework.Path {
 					Required:    true,
 					Description: "The contact email for this account",
 				},
+				"use_ari": {
+					Type:        framework.TypeBool,
+					Default:     true,
+					Description: "Whether to use ARI information to control certificat renewal",
+				},
 			},
 			ExistenceCheck: b.pathExistenceCheck,
 			Operations: map[logical.Operation]framework.OperationHandler{
@@ -136,6 +141,7 @@ func (b *backend) accountWrite(ctx context.Context, req *logical.Request, data *
 	enableTLSALPN01 := data.Get("enable_tls_alpn_01").(bool)
 	dnsResolvers := data.Get("dns_resolvers").([]string)
 	ignoreDNSPropagation := data.Get("ignore_dns_propagation").(bool)
+	useARI := data.Get("use_ari").(bool)
 
 	var update bool
 	user, err := getAccount(ctx, req.Storage, name)
@@ -177,6 +183,7 @@ func (b *backend) accountWrite(ctx context.Context, req *logical.Request, data *
 	user.TermsOfServiceAgreed = termsOfServiceAgreed
 	user.DNSResolvers = dnsResolvers
 	user.IgnoreDNSPropagation = ignoreDNSPropagation
+	user.UseARI = useARI
 
 	client, err := user.getClient()
 	if err != nil {
@@ -201,7 +208,7 @@ func (b *backend) accountWrite(ctx context.Context, req *logical.Request, data *
 	user.Registration = reg
 
 	b.Logger().Info("Saving account")
-	if err = user.save(ctx, req.Storage, req.Path, serverURL); err != nil {
+	if err = user.save(ctx, req.Storage, name, serverURL); err != nil {
 		return nil, err
 	}
 
@@ -231,6 +238,7 @@ func (b *backend) accountRead(ctx context.Context, req *logical.Request, data *f
 			"enable_tls_alpn_01":      a.EnableTLSALPN01,
 			"dns_resolvers":           a.DNSResolvers,
 			"ignore_dns_propagation":  a.IgnoreDNSPropagation,
+			"use_ari":                 a.UseARI,
 		},
 	}, nil
 }

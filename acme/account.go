@@ -24,6 +24,7 @@ type account struct {
 	TermsOfServiceAgreed  bool                   `json:"terms_of_service_agreed,omitempty"`
 	DNSResolvers          []string               `json:"dns_resolvers,omitempty"`
 	IgnoreDNSPropagation  bool                   `json:"ignore_dns_propagation,omitempty"`
+	UseARI                bool                   `json:"use_ari"`
 }
 
 // GetEmail returns the Email of the user
@@ -85,6 +86,7 @@ func getAccount(ctx context.Context, storage logical.Storage, name string) (*acc
 		TermsOfServiceAgreed:  d["terms_of_service_agreed"].(bool),
 		EnableHTTP01:          d["enable_http_01"].(bool),
 		EnableTLSALPN01:       d["enable_tls_alpn_01"].(bool),
+		UseARI:                d["use_ari"].(bool),
 	}
 
 	if ignoreDNSPropagation, ok := d["ignore_dns_propagation"]; ok {
@@ -119,6 +121,7 @@ func (a *account) save(ctx context.Context, storage logical.Storage, name string
 		"enable_tls_alpn_01":      a.EnableTLSALPN01,
 		"dns_resolvers":           a.DNSResolvers,
 		"ignore_dns_propagation":  a.IgnoreDNSPropagation,
+		"use_ari":                 a.UseARI,
 	})
 	if err != nil {
 		return err
