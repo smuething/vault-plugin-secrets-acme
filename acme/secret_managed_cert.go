@@ -324,6 +324,12 @@ func (b *backend) getManagedCertSecret(ctx context.Context, req *logical.Request
 				CertID:            activeCertID,
 			}
 
+			if role.GetAccount().UseARI {
+				if err = ce.Certificates[activeCertID].UpdateARIInformation(role); err != nil {
+					return nil, err
+				}
+			}
+
 		}
 
 		// increase lease counts
