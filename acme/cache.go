@@ -5,9 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-acme/lego/v4/acme"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/hashicorp/vault/sdk/framework"
@@ -99,7 +102,7 @@ func (cc *CachedCertificate) Certificate() *certificate.Resource {
 }
 
 func (ce *CacheEntry) Save(ctx context.Context, storage logical.Storage, key string) error {
-	storageEntry, err := logical.StorageEntryJSON(key, ce)
+	storageEntry, err := logical.StorageEntryJSON(cachePrefix+key, ce)
 	if err != nil {
 		return fmt.Errorf("failed to create cache entry: %v", err)
 	}
@@ -107,7 +110,15 @@ func (ce *CacheEntry) Save(ctx context.Context, storage logical.Storage, key str
 }
 
 func (c *Cache) List(ctx context.Context, storage logical.Storage) ([]string, error) {
-	return storage.List(ctx, cachePrefix)
+	storageList, err := storage.List(ctx, cachePrefix)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]string, len(storageList))
+	for i, path := range storageList {
+		list[i], _ = strings.CutPrefix(path, cachePrefix)
+	}
+	return list, nil
 }
 
 func (c *Cache) Create(ctx context.Context, storage logical.Storage, role_name string, role *role, key string, cert *certificate.Resource) *CacheEntry {
@@ -115,7 +126,7 @@ func (c *Cache) Create(ctx context.Context, storage logical.Storage, role_name s
 }
 
 func (c *Cache) Read(ctx context.Context, storage logical.Storage, key string) (*CacheEntry, error) {
-	storageEntry, err := storage.Get(ctx, key)
+	storageEntry, err := storage.Get(ctx, cachePrefix+key)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +145,7 @@ func (c *Cache) Read(ctx context.Context, storage logical.Storage, key string) (
 }
 
 func (c *Cache) Delete(ctx context.Context, storage logical.Storage, key string) error {
-	return storage.Delete(ctx, key)
+	return storage.Delete(ctx, cachePrefix+key)
 }
 
 func (c *Cache) Clear(ctx context.Context, storage logical.Storage) error {
@@ -153,7 +164,7 @@ func (c *Cache) Clear(ctx context.Context, storage logical.Storage) error {
 	return nil
 }
 
-func getCacheKey(data *framework.FieldData) (string, error) {
+func getCacheKey(rolePath string, data *framework.FieldData) (string, error) {
 
 	d := make(map[string]interface{})
 	for key := range data.Schema {

@@ -2,7 +2,9 @@ package acme
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/fatih/structs"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
@@ -17,6 +19,27 @@ func pathCache(b *backend) []*framework.Path {
 				},
 				logical.ListOperation: &framework.PathOperation{
 					Callback: b.cacheList,
+				},
+			},
+		},
+		{
+			Pattern: "cache/" + framework.GenericNameRegex("cache_key"),
+			Fields: map[string]*framework.FieldSchema{
+				"cache_key": {
+					Type:     framework.TypeLowerCaseString,
+					Required: true,
+					DisplayAttrs: &framework.DisplayAttributes{
+						Name:        "Cache Key",
+						Description: "The cache key for the cache entry",
+					},
+				},
+			},
+			Operations: map[logical.Operation]framework.OperationHandler{
+				logical.ReadOperation: &framework.PathOperation{
+					Callback: b.cacheRead,
+				},
+				logical.DeleteOperation: &framework.PathOperation{
+					Callback: b.cacheDelete,
 				},
 			},
 		},
@@ -64,4 +87,30 @@ func (b *backend) cacheList(ctx context.Context, req *logical.Request, _ *framew
 	}
 
 	return logical.ListResponseWithInfo(keys, keyInfo), nil
+}
+
+func (b *backend) cacheRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	b.cache.Lock()
+	defer b.cache.Unlock()
+
+	cacheKey := data.Get("cache_key").(string)
+
+	ce, err := b.cache.Read(ctx, req.Storage, cacheKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if ce == nil {
+		return nil, fmt.Errorf("Cache entry not found")
+	}
+
+	return &logical.Response{
+		Data: structs.Map(ce),
+	}, nil
+}
+
+func (b *backend) cacheDelete(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
+	b.cache.Lock()
+	defer b.cache.Unlock()
+	return nil, req.Storage.Delete(ctx, req.Path)
 }
