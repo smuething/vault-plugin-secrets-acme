@@ -261,6 +261,11 @@ type role struct {
 	RevokeOnExpiry         bool          `json:"revoke_on_expiry"`
 	MaxTTL                 time.Duration `json:"max_ttl"`
 	TTL                    time.Duration `json:"ttl"`
+	account                *account
+}
+
+func (r *role) GetAccount() *account {
+	return r.account
 }
 
 func (r *role) CertificateState(cert *CachedCertificate) (CertificateState, time.Duration) {
@@ -301,6 +306,11 @@ func getRole(ctx context.Context, storage logical.Storage, name string) (*role, 
 	err = mapstructure.Decode(d, &r)
 	if err != nil {
 		return nil, err
+	}
+
+	r.account, err = getAccount(ctx, storage, r.Account)
+	if err != nil {
+		return nil, fmt.Errorf("Error retrieving account for role: %w", err)
 	}
 
 	return r, nil
