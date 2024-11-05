@@ -47,6 +47,10 @@ func pathCert(b *backend) []*framework.Path {
 					Type:        framework.TypeString,
 					Description: "The ARI certificate ID, or if the ACME CA does not support ARI, the SHA256 thumbprint of the certificate that must be revoked / rolled over when the policy is not 'reuse'",
 				},
+				"agent": {
+					Type:        framework.TypeBool,
+					Description: "Dummy parameter that can be set in Vault agent template files to trigger a write to the secret instead of a read",
+				},
 			},
 			ExistenceCheck: b.pathExistenceCheck,
 			Operations: map[logical.Operation]framework.OperationHandler{
